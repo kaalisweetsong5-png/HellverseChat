@@ -73,24 +73,132 @@ const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Email sending function with nodemailer
-const sendVerificationEmail = async (email, code) => {
-  // In production, use environment variables for email configuration
-  const emailConfig = {
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: process.env.EMAIL_PORT || 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER, // Your email
-      pass: process.env.EMAIL_PASS  // Your email app password
+// Email provider configurations
+const getEmailConfig = (emailUser) => {
+  const domain = emailUser ? emailUser.split('@')[1]?.toLowerCase() : '';
+  
+  // Well-known email provider configurations
+  const providers = {
+    // Gmail
+    'gmail.com': {
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      name: 'Gmail'
+    },
+    // Outlook/Hotmail/Live
+    'outlook.com': {
+      host: 'smtp-mail.outlook.com',
+      port: 587,
+      secure: false,
+      name: 'Outlook'
+    },
+    'hotmail.com': {
+      host: 'smtp-mail.outlook.com',
+      port: 587,
+      secure: false,
+      name: 'Hotmail'
+    },
+    'live.com': {
+      host: 'smtp-mail.outlook.com',
+      port: 587,
+      secure: false,
+      name: 'Live'
+    },
+    // Yahoo
+    'yahoo.com': {
+      host: 'smtp.mail.yahoo.com',
+      port: 587,
+      secure: false,
+      name: 'Yahoo'
+    },
+    'yahoo.co.uk': {
+      host: 'smtp.mail.yahoo.com',
+      port: 587,
+      secure: false,
+      name: 'Yahoo UK'
+    },
+    // iCloud
+    'icloud.com': {
+      host: 'smtp.mail.me.com',
+      port: 587,
+      secure: false,
+      name: 'iCloud'
+    },
+    'me.com': {
+      host: 'smtp.mail.me.com',
+      port: 587,
+      secure: false,
+      name: 'iCloud (me.com)'
+    },
+    // AOL
+    'aol.com': {
+      host: 'smtp.aol.com',
+      port: 587,
+      secure: false,
+      name: 'AOL'
+    },
+    // Zoho
+    'zoho.com': {
+      host: 'smtp.zoho.com',
+      port: 587,
+      secure: false,
+      name: 'Zoho'
+    },
+    // ProtonMail
+    'protonmail.com': {
+      host: 'smtp.protonmail.com',
+      port: 587,
+      secure: false,
+      name: 'ProtonMail'
+    },
+    'pm.me': {
+      host: 'smtp.protonmail.com',
+      port: 587,
+      secure: false,
+      name: 'ProtonMail'
     }
   };
+
+  // Check if we have a configuration for this provider
+  const providerConfig = providers[domain];
+  
+  if (providerConfig) {
+    console.log(`📧 Auto-detected email provider: ${providerConfig.name} (${domain})`);
+    return {
+      host: process.env.EMAIL_HOST || providerConfig.host,
+      port: process.env.EMAIL_PORT || providerConfig.port,
+      secure: providerConfig.secure,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    };
+  } else {
+    // Fallback to manual configuration or Gmail defaults
+    console.log(`📧 Unknown email provider (${domain}), using manual/Gmail configuration`);
+    return {
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: process.env.EMAIL_PORT || 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    };
+  }
+};
+
+// Email sending function with nodemailer
+const sendVerificationEmail = async (email, code) => {
+  const emailConfig = getEmailConfig(process.env.EMAIL_USER);
 
   // For development/testing, log the code
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
     console.log(`📧 [DEV MODE] Verification code: ${code}`);
-    console.log(`📧 [DEV MODE] Set EMAIL_USER and EMAIL_PASS environment variables for actual email sending`);
+    console.log(`📧 [DEV MODE] Supported email providers: Gmail, Outlook, Yahoo, iCloud, AOL, Zoho, ProtonMail`);
+    console.log(`📧 [DEV MODE] Just set EMAIL_USER and EMAIL_PASS - provider auto-detected!`);
     return Promise.resolve();
   }
 
