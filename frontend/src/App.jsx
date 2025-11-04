@@ -14,8 +14,9 @@ function App() {
   const [showBanDialog, setShowBanDialog] = useState(false);
   const [banTarget, setBanTarget] = useState("");
   
-  // Server config
-  const defaultServerUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
+  // Server config - use relative URLs in production, localhost in development
+  const defaultServerUrl = import.meta.env.VITE_API_URL || 
+    (import.meta.env.PROD ? "" : "http://localhost:4000");
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("serverUrl") || defaultServerUrl);
   
   // Auth form states

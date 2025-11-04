@@ -34,7 +34,15 @@ console.log('🌍 Environment:', {
 const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const CORS_ORIGIN = isProduction 
-  ? ["https://hellversechat.com", "https://www.hellversechat.com"] 
+  ? (origin, callback) => {
+      // Allow same origin requests (when frontend and backend are on same domain)
+      if (!origin) return callback(null, true);
+      // Allow Railway domains and custom domains
+      if (origin.includes('railway.app') || origin.includes('hellversechat.com')) {
+        return callback(null, true);
+      }
+      callback(new Error('Not allowed by CORS'));
+    }
   : "http://localhost:5173";
 
 // ES module dirname equivalent
