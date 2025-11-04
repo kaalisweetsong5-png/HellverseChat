@@ -5,7 +5,6 @@ npm-debug.log
 .DS_Store
 .vscode
 .git
-server/
 frontend/node_modules
 frontend/dist
 backend/node_modules

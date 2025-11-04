@@ -1,33 +1,29 @@
-# Multi-stage Docker build for HellverseChat
-FROM node:18-alpine AS builder
-
-# Build client
-WORKDIR /app/client
-COPY server/client/client/package*.json ./
-RUN npm ci --only=production
-COPY server/client/client/ ./
-RUN npm run build
-
-# Production server
-FROM node:18-alpine AS production
+# HellverseChat Backend Dockerfile
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Install server dependencies
-COPY server/package*.json ./
-RUN npm ci --only=production
+# Install backend dependencies
+COPY backend/package*.json ./
+RUN npm install --production
 
-# Copy server code
-COPY server/ ./
+# Copy backend source code
+COPY backend/ ./
 
-# Copy built client files
-COPY --from=builder /app/client/dist ./public
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S hellchat -u 1001 -G nodejs
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S hellchat -u 1001
+# Change ownership and switch user
+RUN chown -R hellchat:nodejs /app
 USER hellchat
 
-EXPOSE 4000
+# Expose port (Railway automatically sets PORT env var)
+EXPOSE 3000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+
+# Start the application
 CMD ["npm", "start"]
