@@ -8,6 +8,20 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
   const [characters, setCharacters] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creatingCharacter, setCreatingCharacter] = useState(false);
+  const [newCharacter, setNewCharacter] = useState({
+    name: '',
+    species: 'Human',
+    gender: 'Unspecified',
+    age: 'Adult',
+    description: '',
+    preferences: '',
+    status: 'Looking for RP',
+    nameColor: '#ff6b6b',
+    textColor: '#ffffff',
+    backgroundColor: '#2c2c54'
+  });
 
   useEffect(() => {
     fetchUserData();
@@ -44,7 +58,53 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
   };
 
   const handleCreateCharacter = () => {
-    navigate('/character/create');
+    setShowCreateModal(true);
+  };
+
+  const createCharacter = async () => {
+    if (!newCharacter.name.trim()) {
+      alert('Please enter a character name');
+      return;
+    }
+
+    setCreatingCharacter(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/characters', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newCharacter)
+      });
+
+      if (response.ok) {
+        const character = await response.json();
+        setCharacters([...characters, character]);
+        setShowCreateModal(false);
+        setNewCharacter({
+          name: '',
+          species: 'Human',
+          gender: 'Unspecified',
+          age: 'Adult',
+          description: '',
+          preferences: '',
+          status: 'Looking for RP',
+          nameColor: '#ff6b6b',
+          textColor: '#ffffff',
+          backgroundColor: '#2c2c54'
+        });
+        alert('Character created successfully!');
+      } else {
+        const error = await response.text();
+        alert(`Failed to create character: ${error}`);
+      }
+    } catch (error) {
+      console.error('Error creating character:', error);
+      alert('Failed to create character. Please try again.');
+    }
+    setCreatingCharacter(false);
   };
 
   const handleViewProfile = (character) => {
@@ -117,13 +177,48 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
         {/* Left Sidebar */}
         <aside className="dashboard-sidebar">
           <div className="sidebar-section">
-            <h3>📋 Quick Jump</h3>
+            <h3>📋 Quick Navigation</h3>
             <ul className="sidebar-menu">
-              <li><a href="#bookmarks">📑 Bookmarks</a></li>
-              <li><a href="#tracked">🔍 Tracked Threads</a></li>
-              <li><a href="#staff">👑 Staff</a></li>
-              <li><a href="#roleplay-ads">📢 Roleplay Ads</a></li>
-              <li><a href="#subscribestar">⭐ SubscribeStar</a></li>
+              <li>
+                <button 
+                  className={`sidebar-nav-btn ${activeTab === 'chat' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('chat')}
+                >
+                  � Chat
+                </button>
+              </li>
+              <li>
+                <button 
+                  className={`sidebar-nav-btn ${activeTab === 'characters' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('characters')}
+                >
+                  👥 Characters
+                </button>
+              </li>
+              <li>
+                <button 
+                  className={`sidebar-nav-btn ${activeTab === 'groups' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('groups')}
+                >
+                  � Groups
+                </button>
+              </li>
+              <li>
+                <button 
+                  className={`sidebar-nav-btn ${activeTab === 'account' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('account')}
+                >
+                  ⚙️ Account
+                </button>
+              </li>
+              <li>
+                <button 
+                  className={`sidebar-nav-btn ${activeTab === 'help' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('help')}
+                >
+                  📚 Help & Info
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -335,6 +430,193 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
           </div>
         </aside>
       </div>
+
+      {/* Character Creation Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🎭 Create New Character</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setShowCreateModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Character Name *</label>
+                <input
+                  type="text"
+                  value={newCharacter.name}
+                  onChange={(e) => setNewCharacter({...newCharacter, name: e.target.value})}
+                  placeholder="Enter character name"
+                  maxLength="50"
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Species</label>
+                  <select 
+                    value={newCharacter.species}
+                    onChange={(e) => setNewCharacter({...newCharacter, species: e.target.value})}
+                  >
+                    <option value="Human">Human</option>
+                    <option value="Elf">Elf</option>
+                    <option value="Dwarf">Dwarf</option>
+                    <option value="Orc">Orc</option>
+                    <option value="Dragon">Dragon</option>
+                    <option value="Wolf">Wolf</option>
+                    <option value="Fox">Fox</option>
+                    <option value="Cat">Cat</option>
+                    <option value="Demon">Demon</option>
+                    <option value="Angel">Angel</option>
+                    <option value="Vampire">Vampire</option>
+                    <option value="Werewolf">Werewolf</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Gender</label>
+                  <select 
+                    value={newCharacter.gender}
+                    onChange={(e) => setNewCharacter({...newCharacter, gender: e.target.value})}
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Herm">Herm</option>
+                    <option value="Cuntboy">Cuntboy</option>
+                    <option value="Shemale">Shemale</option>
+                    <option value="Transgender">Transgender</option>
+                    <option value="Non-binary">Non-binary</option>
+                    <option value="Unspecified">Unspecified</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Age Category</label>
+                <select 
+                  value={newCharacter.age}
+                  onChange={(e) => setNewCharacter({...newCharacter, age: e.target.value})}
+                >
+                  <option value="Adult">Adult</option>
+                  <option value="Young Adult">Young Adult</option>
+                  <option value="Middle-aged">Middle-aged</option>
+                  <option value="Elderly">Elderly</option>
+                  <option value="Immortal">Immortal</option>
+                  <option value="Ancient">Ancient</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={newCharacter.description}
+                  onChange={(e) => setNewCharacter({...newCharacter, description: e.target.value})}
+                  placeholder="Describe your character's appearance and personality..."
+                  rows="4"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>RP Preferences</label>
+                <textarea
+                  value={newCharacter.preferences}
+                  onChange={(e) => setNewCharacter({...newCharacter, preferences: e.target.value})}
+                  placeholder="What kind of roleplay are you interested in?"
+                  rows="3"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Status</label>
+                <select 
+                  value={newCharacter.status}
+                  onChange={(e) => setNewCharacter({...newCharacter, status: e.target.value})}
+                >
+                  <option value="Looking for RP">Looking for RP</option>
+                  <option value="Open for Chat">Open for Chat</option>
+                  <option value="Busy">Busy</option>
+                  <option value="Away">Away</option>
+                  <option value="Do Not Disturb">Do Not Disturb</option>
+                </select>
+              </div>
+
+              <div className="color-customization">
+                <h4>🎨 Color Customization</h4>
+                <div className="color-inputs">
+                  <div className="color-input-group">
+                    <label>Name Color</label>
+                    <input
+                      type="color"
+                      value={newCharacter.nameColor}
+                      onChange={(e) => setNewCharacter({...newCharacter, nameColor: e.target.value})}
+                    />
+                    <span>{newCharacter.nameColor}</span>
+                  </div>
+                  <div className="color-input-group">
+                    <label>Text Color</label>
+                    <input
+                      type="color"
+                      value={newCharacter.textColor}
+                      onChange={(e) => setNewCharacter({...newCharacter, textColor: e.target.value})}
+                    />
+                    <span>{newCharacter.textColor}</span>
+                  </div>
+                  <div className="color-input-group">
+                    <label>Background Color</label>
+                    <input
+                      type="color"
+                      value={newCharacter.backgroundColor}
+                      onChange={(e) => setNewCharacter({...newCharacter, backgroundColor: e.target.value})}
+                    />
+                    <span>{newCharacter.backgroundColor}</span>
+                  </div>
+                </div>
+                
+                <div className="character-preview">
+                  <h5>Preview:</h5>
+                  <div 
+                    className="preview-box"
+                    style={{ backgroundColor: newCharacter.backgroundColor }}
+                  >
+                    <span 
+                      className="preview-name"
+                      style={{ color: newCharacter.nameColor }}
+                    >
+                      {newCharacter.name || 'Character Name'}
+                    </span>
+                    <p style={{ color: newCharacter.textColor }}>
+                      This is how your character will appear!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={createCharacter}
+                disabled={creatingCharacter || !newCharacter.name.trim()}
+              >
+                {creatingCharacter ? 'Creating...' : 'Create Character'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
