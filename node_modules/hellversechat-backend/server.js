@@ -12,9 +12,28 @@ import fs from "fs";
 // Load environment variables
 dotenv.config();
 
+// Force production mode if deployed (detect Railway/cloud environment)
+const isProduction = process.env.NODE_ENV === 'production' 
+  || process.env.RAILWAY_ENVIRONMENT 
+  || process.env.PORT 
+  || process.argv.includes('--production');
+
+// Override NODE_ENV if we detect cloud deployment
+if (isProduction && process.env.NODE_ENV !== 'production') {
+  process.env.NODE_ENV = 'production';
+  console.log('🚀 Detected cloud deployment, forcing production mode');
+}
+
+console.log('🌍 Environment:', {
+  NODE_ENV: process.env.NODE_ENV,
+  isProduction,
+  PORT: process.env.PORT,
+  RAILWAY_ENVIRONMENT: process.env.RAILWAY_ENVIRONMENT
+});
+
 const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-const CORS_ORIGIN = process.env.NODE_ENV === 'production' 
+const CORS_ORIGIN = isProduction 
   ? ["https://hellversechat.com", "https://www.hellversechat.com"] 
   : "http://localhost:5173";
 
@@ -44,50 +63,50 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Serve static files from frontend build (production only)
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, '../frontend/dist');
-  console.log('Checking frontend path:', frontendPath);
-  
-  // Check if frontend dist exists
-  try {
-    if (fs.existsSync(frontendPath)) {
-      console.log('✅ Frontend dist found, serving static files');
-      app.use(express.static(frontendPath));
-      
-      // Serve index.html for any non-API routes (SPA fallback)
-      app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
-          res.sendFile(path.join(frontendPath, 'index.html'));
-        }
-      });
-    } else {
-      console.log('⚠️  Frontend dist not found, API-only mode');
-      app.get('/', (req, res) => {
-        res.json({ 
-          message: 'HellverseChat API Server', 
-          status: 'running',
-          note: 'Frontend not built or not found. Build frontend and restart server.'
-        });
-      });
-    }
-  } catch (error) {
-    console.log('❌ Error checking frontend:', error.message);
+// Serve static files from frontend build
+const frontendPath = path.join(__dirname, '../frontend/dist');
+console.log('🔍 Checking frontend path:', frontendPath);
+console.log('🔍 Production mode:', isProduction);
+
+// Always try to serve frontend if it exists (production or development with built frontend)
+try {
+  if (fs.existsSync(frontendPath)) {
+    console.log('✅ Frontend dist found, serving static files');
+    app.use(express.static(frontendPath));
+    
+    // Serve index.html for any non-API routes (SPA fallback)
+    app.get('*', (req, res) => {
+      if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/health')) {
+        console.log('📄 Serving index.html for route:', req.path);
+        res.sendFile(path.join(frontendPath, 'index.html'));
+      }
+    });
+    
+    console.log('🎯 Frontend serving configured successfully');
+  } else {
+    console.log('⚠️  Frontend dist not found at:', frontendPath);
+    
+    // Fallback API response
     app.get('/', (req, res) => {
       res.json({ 
         message: 'HellverseChat API Server', 
-        status: 'running', 
-        error: 'Frontend check failed'
+        status: 'running',
+        environment: process.env.NODE_ENV,
+        isProduction,
+        note: 'Frontend not built. Expected at: ' + frontendPath,
+        frontendExists: fs.existsSync(frontendPath)
       });
     });
   }
-} else {
-  // Development mode - just serve API
+} catch (error) {
+  console.log('❌ Error checking frontend:', error.message);
   app.get('/', (req, res) => {
     res.json({ 
-      message: 'HellverseChat API Server (Development)', 
+      message: 'HellverseChat API Server', 
       status: 'running',
-      frontend: 'Run frontend separately in development'
+      environment: process.env.NODE_ENV,
+      isProduction,
+      error: 'Frontend check failed: ' + error.message
     });
   });
 }

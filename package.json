@@ -4,10 +4,10 @@
   "description": "F-Chat Style Real-time Chat Application",
   "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "start:production": "npm run build:frontend && node backend/server.js",
+    "start": "node backend/server.js --production",
+    "start:production": "npm run build:frontend && node backend/server.js --production",
     "dev": "node backend/server.js",
-    "build": "npm install --prefix backend",
+    "build": "npm install --prefix backend && npm run build:frontend",
     "build:frontend": "test -d frontend && (cd frontend && npm install && npm run build) || echo 'Frontend directory not found, skipping build'"
   },
   "engines": {
