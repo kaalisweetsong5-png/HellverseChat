@@ -7,6 +7,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 // Load environment variables
 dotenv.config();
@@ -46,8 +47,49 @@ app.use(express.json());
 // Serve static files from frontend build (production only)
 if (process.env.NODE_ENV === 'production') {
   const frontendPath = path.join(__dirname, '../frontend/dist');
-  console.log('Serving static files from:', frontendPath);
-  app.use(express.static(frontendPath));
+  console.log('Checking frontend path:', frontendPath);
+  
+  // Check if frontend dist exists
+  try {
+    if (fs.existsSync(frontendPath)) {
+      console.log('✅ Frontend dist found, serving static files');
+      app.use(express.static(frontendPath));
+      
+      // Serve index.html for any non-API routes (SPA fallback)
+      app.get('*', (req, res) => {
+        if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+          res.sendFile(path.join(frontendPath, 'index.html'));
+        }
+      });
+    } else {
+      console.log('⚠️  Frontend dist not found, API-only mode');
+      app.get('/', (req, res) => {
+        res.json({ 
+          message: 'HellverseChat API Server', 
+          status: 'running',
+          note: 'Frontend not built or not found. Build frontend and restart server.'
+        });
+      });
+    }
+  } catch (error) {
+    console.log('❌ Error checking frontend:', error.message);
+    app.get('/', (req, res) => {
+      res.json({ 
+        message: 'HellverseChat API Server', 
+        status: 'running', 
+        error: 'Frontend check failed'
+      });
+    });
+  }
+} else {
+  // Development mode - just serve API
+  app.get('/', (req, res) => {
+    res.json({ 
+      message: 'HellverseChat API Server (Development)', 
+      status: 'running',
+      frontend: 'Run frontend separately in development'
+    });
+  });
 }
 
 // Health check endpoint for Railway/Docker
