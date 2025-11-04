@@ -17,7 +17,17 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
     if (!import.meta.env.PROD) {
       return "http://localhost:4000";
     }
-    return import.meta.env.VITE_API_URL || "https://www.hellversechat.com";
+    
+    // In production, check if we're on the same domain
+    const currentDomain = window.location.origin;
+    const apiUrl = import.meta.env.VITE_API_URL || "https://www.hellversechat.com";
+    
+    // If we're on the same domain as the API, use relative URLs
+    if (currentDomain === apiUrl) {
+      return "";
+    }
+    
+    return apiUrl;
   };
   
   const serverUrl = localStorage.getItem("serverUrl") || getServerUrl();
@@ -69,7 +79,9 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
     try {
       // Fetch user's characters
       const token = localStorage.getItem('token');
-      const response = await fetch(`${serverUrl}/api/characters`, {
+      const apiUrl = `${serverUrl}/api/characters`;
+      console.log('🔗 Fetching characters from:', apiUrl);
+      const response = await fetch(apiUrl, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -108,7 +120,10 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
     setCreatingCharacter(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${serverUrl}/api/characters`, {
+      const apiUrl = `${serverUrl}/api/characters`;
+      console.log('🔗 Creating character at:', apiUrl);
+      console.log('📦 Character data:', newCharacter);
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
