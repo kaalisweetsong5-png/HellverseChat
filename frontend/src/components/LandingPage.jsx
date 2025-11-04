@@ -1,15 +1,25 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './LandingPage.css';
+
+// Utility function to get server URL
+const getServerUrl = () => {
+  return process.env.NODE_ENV === 'production'
+    ? 'https://www.hellversechat.com'
+    : 'http://localhost:3000';
+};
 
 function LandingPage() {
   const navigate = useNavigate();
   const [news, setNews] = useState([]);
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [showSignupForm, setShowSignupForm] = useState(false);
+  const [showVerificationStep, setShowVerificationStep] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [signupData, setSignupData] = useState({
-    username: '', email: '', password: '', confirmPassword: '', timezone: 'GMT'
+    username: '', email: '', confirmEmail: '', password: '', confirmPassword: '', timezone: 'GMT'
   });
 
   useEffect(() => {
@@ -37,8 +47,128 @@ function LandingPage() {
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    // Add your signup logic here - for now just redirect to signup page
-    navigate('/signup');
+    
+    // Validation
+    if (signupData.email !== signupData.confirmEmail) {
+      alert('Email addresses do not match');
+      return;
+    }
+    
+    if (signupData.password !== signupData.confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    if (signupData.password.length < 6) {
+      alert('Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Get server URL
+      const serverUrl = getServerUrl();
+      
+      const response = await fetch(`${serverUrl}/api/signup-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: signupData.username,
+          email: signupData.email,
+          password: signupData.password
+        })
+      });
+
+      const data = await response.text();
+      
+      if (response.ok) {
+        setShowVerificationStep(true);
+        alert('Verification code sent! Check your email.');
+      } else {
+        alert(`Signup failed: ${data}`);
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      alert('Signup failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerification = async (e) => {
+    e.preventDefault();
+    
+    if (verificationCode.length !== 6) {
+      alert('Please enter a 6-digit verification code');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const serverUrl = getServerUrl();
+      
+      const response = await fetch(`${serverUrl}/api/verify-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: signupData.email,
+          code: verificationCode
+        })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Store auth data and redirect
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        alert('Account verified! Welcome to HellverseChat!');
+        navigate('/characters');
+        window.location.reload(); // Refresh to update auth state
+      } else {
+        alert(`Verification failed: ${data.message || 'Invalid code'}`);
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      alert('Verification failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setIsLoading(true);
+    
+    try {
+      const serverUrl = getServerUrl();
+      
+      const response = await fetch(`${serverUrl}/api/resend-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: signupData.email
+        })
+      });
+      
+      if (response.ok) {
+        alert('Verification code resent! Check your email.');
+      } else {
+        alert('Failed to resend code. Please try again.');
+      }
+    } catch (error) {
+      console.error('Resend error:', error);
+      alert('Failed to resend code. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -187,8 +317,14 @@ function LandingPage() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Confirm</label>
-                  <input type="email" placeholder="Confirm email address" />
+                  <label>Confirm Email</label>
+                  <input 
+                    type="email" 
+                    placeholder="Confirm email address"
+                    value={signupData.confirmEmail}
+                    onChange={(e) => setSignupData({...signupData, confirmEmail: e.target.value})}
+                    required 
+                  />
                 </div>
                 
                 <div className="password-strength">
@@ -237,10 +373,55 @@ function LandingPage() {
                   </div>
                 </div>
                 
-                <button type="submit" className="create-account-btn">
-                  Create account!
+                <button type="submit" className="create-account-btn" disabled={isLoading}>
+                  {isLoading ? 'Creating Account...' : 'Create account!'}
                 </button>
               </form>
+              
+              {/* Email Verification Step */}
+              {showVerificationStep && (
+                <div className="verification-step">
+                  <h3 className="form-title">Verify Your Email</h3>
+                  <p className="verification-notice">
+                    We've sent a 6-digit verification code to <strong>{signupData.email}</strong>
+                  </p>
+                  <p className="verification-notice">
+                    Please check your email and enter the code below to complete your registration.
+                  </p>
+                  
+                  <form className="verification-form" onSubmit={handleVerification}>
+                    <div className="form-group">
+                      <label>* Verification Code</label>
+                      <input 
+                        type="text" 
+                        placeholder="Enter 6-digit code"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        maxLength="6"
+                        required
+                        className="verification-input"
+                      />
+                    </div>
+                    
+                    <div className="verification-actions">
+                      <button type="submit" className="verify-btn" disabled={isLoading || verificationCode.length !== 6}>
+                        {isLoading ? 'Verifying...' : 'Verify Account'}
+                      </button>
+                      <button type="button" className="resend-btn" onClick={handleResendCode} disabled={isLoading}>
+                        {isLoading ? 'Sending...' : 'Resend Code'}
+                      </button>
+                    </div>
+                  </form>
+                  
+                  <button 
+                    className="back-btn" 
+                    onClick={() => setShowVerificationStep(false)}
+                    type="button"
+                  >
+                    ← Back to Signup
+                  </button>
+                </div>
+              )}
             </div>
             
             <div className="features-sidebar">

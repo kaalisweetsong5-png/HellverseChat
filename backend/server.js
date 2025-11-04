@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import nodemailer from "nodemailer";
 
 // Load environment variables
 dotenv.config();
@@ -55,6 +56,7 @@ const socketsByCharacter = new Map(); // characterId -> socketId
 const bannedUsers = new Set();
 const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
 const newsArticles = new Map(); // In-memory news storage (use database in production)
+const pendingVerifications = new Map(); // email -> { username, passwordHash, email, code, expiresAt }
 
 // Admin configuration - add your username here
 const ADMIN_USERS = new Set([
@@ -65,6 +67,79 @@ const ADMIN_USERS = new Set([
 // Helper functions
 const isAdmin = (username) => ADMIN_USERS.has(username);
 const isBanned = (username) => bannedUsers.has(username);
+
+// Generate 6-digit verification code
+const generateVerificationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Email sending function with nodemailer
+const sendVerificationEmail = async (email, code) => {
+  // In production, use environment variables for email configuration
+  const emailConfig = {
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: process.env.EMAIL_PORT || 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER, // Your email
+      pass: process.env.EMAIL_PASS  // Your email app password
+    }
+  };
+
+  // For development/testing, log the code
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
+    console.log(`📧 [DEV MODE] Verification code: ${code}`);
+    console.log(`📧 [DEV MODE] Set EMAIL_USER and EMAIL_PASS environment variables for actual email sending`);
+    return Promise.resolve();
+  }
+
+  try {
+    const transporter = nodemailer.createTransporter(emailConfig);
+
+    const mailOptions = {
+      from: `"HellverseChat" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'HellverseChat - Verify Your Account',
+      text: `Welcome to HellverseChat! Your verification code is: ${code}. This code will expire in 10 minutes.`,
+      html: `
+        <div style="background: #1a1a2e; color: #e0e0e0; padding: 20px; font-family: Arial, sans-serif;">
+          <div style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 20px; border-radius: 8px; border: 2px solid #3498db;">
+            <h1 style="color: #3498db; text-align: center; margin-bottom: 20px;">
+              🔥 Welcome to HellverseChat! 🔥
+            </h1>
+            <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+              Welcome to the supernatural roleplaying community! To complete your registration, please use the verification code below:
+            </p>
+            <div style="background: rgba(52, 152, 219, 0.2); border: 1px solid #3498db; border-radius: 6px; padding: 20px; text-align: center; margin: 20px 0;">
+              <h2 style="color: #3498db; font-size: 32px; letter-spacing: 8px; margin: 0;">
+                ${code}
+              </h2>
+            </div>
+            <p style="font-size: 14px; color: #bdc3c7; margin-bottom: 10px;">
+              • This code will expire in 10 minutes
+            </p>
+            <p style="font-size: 14px; color: #bdc3c7; margin-bottom: 20px;">
+              • If you didn't create this account, you can safely ignore this email
+            </p>
+            <div style="text-align: center; margin-top: 30px;">
+              <p style="color: #7f8c8d; font-size: 12px;">
+                HellverseChat - Supernatural Roleplaying Community<br>
+                Create your character and join the darkness!
+              </p>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`📧 Verification email sent successfully to: ${email}`);
+  } catch (error) {
+    console.error('Email sending error:', error);
+    throw new Error('Failed to send verification email');
+  }
+};
 
 const app = express();
 app.use(cors({
@@ -115,6 +190,144 @@ try {
 // Health check endpoint for Railway/Docker
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Email verification endpoints
+app.post("/api/signup-request", async (req, res) => {
+  const { username, password, email } = req.body;
+  
+  if (!username || !password || !email) {
+    return res.status(400).send("Username, password, and email are required");
+  }
+  
+  if (users.has(username)) {
+    return res.status(409).send("Username already exists");
+  }
+  
+  if (isBanned(username)) {
+    return res.status(403).send("Username is banned");
+  }
+  
+  // Check if email is already being used by an existing user
+  for (const [existingUsername, userData] of users) {
+    if (userData.email === email) {
+      return res.status(409).send("Email already in use");
+    }
+  }
+  
+  try {
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Generate verification code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
+    
+    // Store pending verification
+    pendingVerifications.set(email, {
+      username,
+      passwordHash,
+      email,
+      code,
+      expiresAt,
+      createdAt: new Date().toISOString()
+    });
+    
+    // Send verification email
+    await sendVerificationEmail(email, code);
+    
+    res.status(200).send("Verification code sent");
+  } catch (error) {
+    console.error('Signup request error:', error);
+    res.status(500).send("Failed to send verification code");
+  }
+});
+
+app.post("/api/verify-account", async (req, res) => {
+  const { email, code } = req.body;
+  
+  if (!email || !code) {
+    return res.status(400).json({ message: "Email and code are required" });
+  }
+  
+  const pending = pendingVerifications.get(email);
+  
+  if (!pending) {
+    return res.status(400).json({ message: "No pending verification found for this email" });
+  }
+  
+  if (Date.now() > pending.expiresAt) {
+    pendingVerifications.delete(email);
+    return res.status(400).json({ message: "Verification code expired" });
+  }
+  
+  if (pending.code !== code) {
+    return res.status(400).json({ message: "Invalid verification code" });
+  }
+  
+  try {
+    // Create the user account
+    const userData = { 
+      passwordHash: pending.passwordHash, 
+      email: pending.email,
+      isAdmin: isAdmin(pending.username),
+      characters: new Map(),
+      createdAt: pending.createdAt
+    };
+    
+    users.set(pending.username, userData);
+    
+    // Remove pending verification
+    pendingVerifications.delete(email);
+    
+    // Generate JWT token
+    const token = jwt.sign({ username: pending.username }, SECRET);
+    
+    res.json({ 
+      token, 
+      user: {
+        username: pending.username, 
+        email: userData.email,
+        isAdmin: userData.isAdmin,
+        characterCount: 0
+      }
+    });
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ message: "Failed to create account" });
+  }
+});
+
+app.post("/api/resend-code", async (req, res) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).send("Email is required");
+  }
+  
+  const pending = pendingVerifications.get(email);
+  
+  if (!pending) {
+    return res.status(400).send("No pending verification found for this email");
+  }
+  
+  try {
+    // Generate new code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
+    
+    // Update pending verification
+    pending.code = code;
+    pending.expiresAt = expiresAt;
+    
+    // Send new verification email
+    await sendVerificationEmail(email, code);
+    
+    res.status(200).send("New verification code sent");
+  } catch (error) {
+    console.error('Resend code error:', error);
+    res.status(500).send("Failed to resend verification code");
+  }
 });
 
 app.post("/signup", async (req, res) => {
