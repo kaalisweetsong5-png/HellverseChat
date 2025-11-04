@@ -81,15 +81,6 @@ try {
   if (fs.existsSync(frontendPath)) {
     console.log('✅ Frontend dist found, serving static files');
     app.use(express.static(frontendPath));
-    
-    // Serve index.html for any non-API routes (SPA fallback)
-    app.get('*', (req, res) => {
-      if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/health')) {
-        console.log('📄 Serving index.html for route:', req.path);
-        res.sendFile(path.join(frontendPath, 'index.html'));
-      }
-    });
-    
     console.log('🎯 Frontend serving configured successfully');
   } else {
     console.log('⚠️  Frontend dist not found at:', frontendPath);
@@ -463,6 +454,20 @@ io.on("connection", (socket) => {
     });
   });
 });
+
+// SPA fallback route - MUST be after all API routes
+if (fs.existsSync(path.join(__dirname, '../frontend/dist'))) {
+  app.get('*', (req, res) => {
+    // Only serve SPA for non-API routes
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io') && !req.path.startsWith('/health') && !req.path.startsWith('/signup') && !req.path.startsWith('/login') && !req.path.startsWith('/profile')) {
+      console.log('📄 Serving index.html for route:', req.path);
+      res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    } else {
+      // Let API routes handle themselves or return 404
+      res.status(404).json({ error: 'API endpoint not found' });
+    }
+  });
+}
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, '0.0.0.0', () => {
