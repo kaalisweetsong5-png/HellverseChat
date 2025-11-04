@@ -13,15 +13,6 @@ function App() {
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Ensure we're on the correct domain in production
-  useEffect(() => {
-    if (import.meta.env.PROD && window.location.host === 'hellversechat.com') {
-      const newUrl = window.location.href.replace('hellversechat.com', 'www.hellversechat.com');
-      window.location.replace(newUrl);
-      return;
-    }
-  }, []);
-
   useEffect(() => {
     // Check for existing authentication
     const token = localStorage.getItem("token");
