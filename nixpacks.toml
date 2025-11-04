@@ -3,10 +3,10 @@
 nixPkgs = ['nodejs', 'npm']
 
 [phases.install]
-cmds = ['npm install --prefix backend']
+cmds = ['npm install --prefix backend', 'npm install --prefix frontend']
 
 [phases.build]
-cmds = ['echo "Build completed"']
+cmds = ['cd frontend && npm run build']
 
 [start]
 cmd = 'node backend/server.js'

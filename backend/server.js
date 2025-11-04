@@ -5,13 +5,21 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // Load environment variables
 dotenv.config();
 
 const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+const CORS_ORIGIN = process.env.NODE_ENV === 'production' 
+  ? ["https://hellversechat.com", "https://www.hellversechat.com"] 
+  : "http://localhost:5173";
+
+// ES module dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const users = new Map();
 const socketsByUser = new Map();
@@ -22,6 +30,13 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Serve static files from frontend build (production only)
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '../frontend/dist');
+  console.log('Serving static files from:', frontendPath);
+  app.use(express.static(frontendPath));
+}
 
 // Health check endpoint for Railway/Docker
 app.get("/health", (req, res) => {
@@ -47,6 +62,14 @@ app.post("/login", async (req, res) => {
   const token = jwt.sign({ username }, SECRET);
   res.json({ token, username, display: u.display });
 });
+
+// Catch-all handler for production: serve React app for any non-API routes
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    const frontendPath = path.join(__dirname, '../frontend/dist/index.html');
+    res.sendFile(frontendPath);
+  });
+}
 
 const server = http.createServer(app);
 const io = new SocketIOServer(server, { 
