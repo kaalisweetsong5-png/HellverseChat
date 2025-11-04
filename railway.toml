@@ -3,7 +3,7 @@
   builder = "NIXPACKS"
 
 [deploy]
-  startCommand = "npm run start:production"
+  startCommand = "node backend/server.js --production"
   restartPolicyType = "ON_FAILURE"
   restartPolicyMaxRetries = 10
 
