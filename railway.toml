@@ -3,7 +3,7 @@
   builder = "NIXPACKS"
 
 [deploy]
-  startCommand = "NODE_ENV=production npm run start:production"
+  startCommand = "npm run start:production"
   restartPolicyType = "ON_FAILURE"
   restartPolicyMaxRetries = 10
 

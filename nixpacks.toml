@@ -38,4 +38,7 @@ cmds = [
 ]
 
 [start]
-cmd = 'node backend/server.js'
+cmd = 'npm run start:production'
+
+[variables]
+NODE_ENV = 'production'
