@@ -95,7 +95,7 @@ const sendVerificationEmail = async (email, code) => {
   }
 
   try {
-    const transporter = nodemailer.createTransporter(emailConfig);
+    const transporter = nodemailer.createTransport(emailConfig);
 
     const mailOptions = {
       from: `"HellverseChat" <${process.env.EMAIL_USER}>`,
