@@ -34,6 +34,11 @@ console.log('🌍 Environment:', {
 
 const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+
+// Maintenance mode configuration
+const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true' || false;
+const MAINTENANCE_MESSAGE = process.env.MAINTENANCE_MESSAGE || 'HellverseChat is currently undergoing maintenance. Please check back soon!';
+const MAINTENANCE_ETA = process.env.MAINTENANCE_ETA || null;
 const CORS_ORIGIN = isProduction 
   ? (origin, callback) => {
       // Allow same origin requests (when frontend and backend are on same domain)
@@ -487,6 +492,34 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Maintenance mode middleware
+app.use((req, res, next) => {
+  // Skip maintenance check for health, maintenance API, and static assets
+  if (req.path === '/health' || 
+      req.path === '/api/maintenance' || 
+      req.path.startsWith('/static/') ||
+      req.path.includes('.')) {
+    return next();
+  }
+  
+  if (MAINTENANCE_MODE) {
+    // For API routes, return JSON
+    if (req.path.startsWith('/api/')) {
+      return res.status(503).json({
+        error: 'Service Temporarily Unavailable',
+        maintenanceMode: true,
+        message: MAINTENANCE_MESSAGE,
+        eta: MAINTENANCE_ETA
+      });
+    }
+    
+    // For web routes, let the frontend handle maintenance display
+    // The frontend will check the maintenance API and show appropriate page
+  }
+  
+  next();
+});
+
 // Serve static files from frontend build
 const frontendPath = path.join(__dirname, '../frontend/dist');
 console.log('🔍 Checking frontend path:', frontendPath);
@@ -529,6 +562,16 @@ try {
 // Health check endpoint for Railway/Docker
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Maintenance mode endpoint
+app.get("/api/maintenance", (req, res) => {
+  res.status(200).json({
+    maintenanceMode: MAINTENANCE_MODE,
+    message: MAINTENANCE_MESSAGE,
+    eta: MAINTENANCE_ETA,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Debug endpoint to check environment

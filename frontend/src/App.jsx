@@ -4,6 +4,7 @@ import LandingPage from "./components/LandingPage";
 import AuthPage from "./components/AuthPage";
 import Dashboard from "./components/Dashboard";
 import ChatInterface from "./components/ChatInterface";
+import MaintenancePage from "./components/MaintenancePage";
 import "./App.css";
 
 function App() {
@@ -12,8 +13,39 @@ function App() {
   const [user, setUser] = useState(null);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceInfo, setMaintenanceInfo] = useState(null);
+
+  // Check maintenance mode
+  const checkMaintenanceMode = async () => {
+    try {
+      // Get server URL (consistent with AuthPage approach)
+      const getServerUrl = () => {
+        if (!import.meta.env.PROD) {
+          return "http://localhost:4000";
+        }
+        return import.meta.env.VITE_API_URL || "https://www.hellversechat.com";
+      };
+      
+      const serverUrl = localStorage.getItem("serverUrl") || getServerUrl();
+      const apiUrl = serverUrl ? `${serverUrl}/api/maintenance` : '/api/maintenance';
+      
+      const response = await fetch(apiUrl);
+      if (response.ok) {
+        const data = await response.json();
+        setMaintenanceMode(data.maintenanceMode);
+        setMaintenanceInfo(data);
+      } else {
+        console.warn('Could not check maintenance status');
+      }
+    } catch (error) {
+      console.warn('Maintenance check failed:', error);
+    }
+  };
 
   useEffect(() => {
+    // Check maintenance mode first
+    checkMaintenanceMode();
     // Check for existing authentication
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
@@ -58,6 +90,13 @@ function App() {
     }
     
     setIsLoading(false);
+    
+    // Set up periodic maintenance check (every 30 seconds)
+    const maintenanceInterval = setInterval(() => {
+      checkMaintenanceMode();
+    }, 30000);
+    
+    return () => clearInterval(maintenanceInterval);
   }, []);
 
   const handleLogout = () => {
@@ -91,8 +130,14 @@ function App() {
   console.log('🚦 App render:', {
     isAuthenticated,
     user: user?.username || 'none',
-    currentPath: window.location.pathname
+    currentPath: window.location.pathname,
+    maintenanceMode
   });
+
+  // Show maintenance page if maintenance mode is active
+  if (maintenanceMode) {
+    return <MaintenancePage maintenanceInfo={maintenanceInfo} />;
+  }
 
   return (
     <div className="app">
