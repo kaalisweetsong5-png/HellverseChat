@@ -75,7 +75,20 @@ const generateVerificationCode = () => {
 
 // Email provider configurations
 const getEmailConfig = (emailUser) => {
-  const domain = emailUser ? emailUser.split('@')[1]?.toLowerCase() : '';
+  console.log('🔧 getEmailConfig called with emailUser:', emailUser);
+  
+  if (!emailUser || typeof emailUser !== 'string') {
+    console.error('❌ Invalid emailUser provided:', emailUser);
+    throw new Error('Valid email user is required');
+  }
+  
+  if (!emailUser.includes('@')) {
+    console.error('❌ emailUser does not contain @ symbol:', emailUser);
+    throw new Error('Email must contain @ symbol');
+  }
+  
+  const domain = emailUser.split('@')[1]?.toLowerCase();
+  console.log('🌐 Extracted domain:', domain);
   
   // Well-known email provider configurations
   const providers = {
@@ -161,7 +174,10 @@ const getEmailConfig = (emailUser) => {
   };
 
   // Check if we have a configuration for this provider
+  console.log('🔍 Looking up provider for domain:', domain);
+  console.log('🔍 Available providers:', Object.keys(providers));
   const providerConfig = providers[domain];
+  console.log('🔍 Found provider config:', providerConfig ? providerConfig.name : 'none');
   
   if (providerConfig) {
     console.log(`📧 Auto-detected email provider: ${providerConfig.name} (${domain})`);
@@ -209,9 +225,12 @@ const sendVerificationEmail = async (email, code) => {
 
   console.log('📧 Email credentials found, getting config...');
   const emailConfig = getEmailConfig(process.env.EMAIL_USER);
+  console.log('📧 Email config created:', JSON.stringify(emailConfig, null, 2));
 
   try {
+    console.log('📧 Creating nodemailer transporter...');
     const transporter = nodemailer.createTransport(emailConfig);
+    console.log('📧 Transporter created successfully');
 
     const mailOptions = {
       from: `"HellverseChat" <${process.env.EMAIL_USER}>`,
@@ -249,10 +268,17 @@ const sendVerificationEmail = async (email, code) => {
       `
     };
 
+    console.log('📧 Attempting to send email with options:', JSON.stringify({
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject
+    }, null, 2));
+    
     await transporter.sendMail(mailOptions);
     console.log(`📧 Verification email sent successfully to: ${email}`);
   } catch (error) {
-    console.error('Email sending error:', error);
+    console.error('❌ Email sending error:', error);
+    console.error('❌ Email error stack:', error.stack);
     throw new Error('Failed to send verification email');
   }
 };
