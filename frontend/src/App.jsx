@@ -8,6 +8,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [showLogin, setShowLogin] = useState(true);
   const [showServerConfig, setShowServerConfig] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState(null);
   
   // Server config
   const defaultServerUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -19,14 +21,27 @@ function App() {
   const [displayName, setDisplayName] = useState("");
   const [authError, setAuthError] = useState("");
   
+  // Character profile states
+  const [character, setCharacter] = useState({
+    name: "",
+    avatar: "",
+    species: "Human",
+    gender: "Unspecified", 
+    age: "Adult",
+    description: "",
+    preferences: "",
+    status: "Looking for RP"
+  });
+  
   // Chat states
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [onlineUsers, setOnlineUsers] = useState(new Map()); // Now stores user profiles
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [currentRoom, setCurrentRoom] = useState("main");
-  const [rooms, setRooms] = useState(["main", "general", "random"]);
+  const [rooms, setRooms] = useState(["main", "general", "adult", "fantasy", "sci-fi"]);
   const [newRoomName, setNewRoomName] = useState("");
+  const [messageType, setMessageType] = useState("normal"); // normal, emote, ooc
   
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -53,15 +68,15 @@ function App() {
       setMessages(prev => [...prev, msg]);
     });
 
-    newSocket.on("presence", ({ user, status }) => {
+    newSocket.on("presence", ({ user, status, character }) => {
       setOnlineUsers(prev => {
-        const newSet = new Set(prev);
+        const newMap = new Map(prev);
         if (status === "online") {
-          newSet.add(user);
+          newMap.set(user, { character: character || null });
         } else {
-          newSet.delete(user);
+          newMap.delete(user);
         }
-        return newSet;
+        return newMap;
       });
     });
 
@@ -105,7 +120,15 @@ function App() {
     
     const endpoint = isSignup ? "/signup" : "/login";
     const body = isSignup 
-      ? { username, password, display: displayName || username }
+      ? { 
+          username, 
+          password, 
+          display: displayName || username,
+          character: {
+            ...character,
+            name: character.name || displayName || username
+          }
+        }
       : { username, password };
 
     try {
@@ -128,6 +151,9 @@ function App() {
       localStorage.setItem("user", JSON.stringify(data));
       
       setUser(data);
+      if (data.character) {
+        setCharacter(data.character);
+      }
       connectSocket(data.token);
       
       // Reset form
@@ -147,8 +173,10 @@ function App() {
     setIsAuthenticated(false);
     setUser(null);
     setMessages([]);
-    setOnlineUsers(new Set());
+    setOnlineUsers(new Map());
     setTypingUsers(new Set());
+    setShowProfile(false);
+    setViewingProfile(null);
   };
 
   const sendMessage = () => {
@@ -156,12 +184,51 @@ function App() {
     
     socket.emit("message", { 
       text: message.trim(),
-      room: currentRoom 
+      room: currentRoom,
+      messageType: messageType
     });
     setMessage("");
     
     // Stop typing indicator
     socket.emit("typing", { room: currentRoom, typing: false });
+  };
+
+  const updateProfile = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${serverUrl}/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          display: user.display,
+          character: character
+        })
+      });
+
+      if (response.ok) {
+        const updatedData = await response.json();
+        setUser(updatedData);
+        localStorage.setItem("user", JSON.stringify(updatedData));
+        setShowProfile(false);
+      }
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+    }
+  };
+
+  const viewUserProfile = async (username) => {
+    try {
+      const response = await fetch(`${serverUrl}/profile/${username}`);
+      if (response.ok) {
+        const profileData = await response.json();
+        setViewingProfile(profileData);
+      }
+    } catch (error) {
+      console.error("Failed to load profile:", error);
+    }
   };
 
   const handleTyping = (text) => {
@@ -277,13 +344,67 @@ function App() {
               className="auth-input"
             />
             {!showLogin && (
-              <input
-                type="text"
-                placeholder="Display Name (optional)"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="auth-input"
-              />
+              <>
+                <input
+                  type="text"
+                  placeholder="Display Name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="auth-input"
+                />
+                
+                <div className="character-section">
+                  <h4>Create Your Character</h4>
+                  <input
+                    type="text"
+                    placeholder="Character Name"
+                    value={character.name}
+                    onChange={(e) => setCharacter({...character, name: e.target.value})}
+                    className="auth-input"
+                  />
+                  
+                  <div className="form-row">
+                    <select 
+                      value={character.species} 
+                      onChange={(e) => setCharacter({...character, species: e.target.value})}
+                      className="auth-select"
+                    >
+                      <option value="Human">Human</option>
+                      <option value="Elf">Elf</option>
+                      <option value="Dwarf">Dwarf</option>
+                      <option value="Orc">Orc</option>
+                      <option value="Dragon">Dragon</option>
+                      <option value="Wolf">Wolf</option>
+                      <option value="Fox">Fox</option>
+                      <option value="Cat">Cat</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    
+                    <select 
+                      value={character.gender} 
+                      onChange={(e) => setCharacter({...character, gender: e.target.value})}
+                      className="auth-select"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Herm">Herm</option>
+                      <option value="Cuntboy">Cuntboy</option>
+                      <option value="Shemale">Shemale</option>
+                      <option value="Transgender">Transgender</option>
+                      <option value="Non-binary">Non-binary</option>
+                      <option value="None">None</option>
+                    </select>
+                  </div>
+                  
+                  <textarea
+                    placeholder="Character Description"
+                    value={character.description}
+                    onChange={(e) => setCharacter({...character, description: e.target.value})}
+                    className="auth-textarea"
+                    rows="3"
+                  />
+                </div>
+              </>
             )}
             
             {authError && <div className="error">{authError}</div>}
@@ -292,7 +413,7 @@ function App() {
               className="auth-button"
               onClick={() => handleAuth(!showLogin)}
             >
-              {showLogin ? "Login" : "Sign Up"}
+              {showLogin ? "Login" : "Create Character & Join"}
             </button>
           </div>
         </div>
@@ -300,12 +421,112 @@ function App() {
     );
   }
 
+  // Profile Modal Component
+  const ProfileModal = ({ profile, onClose, isOwnProfile = false }) => (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{isOwnProfile ? "Edit Profile" : `${profile?.character?.name || profile?.display}'s Profile`}</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        {isOwnProfile ? (
+          <div className="profile-edit">
+            <input
+              type="text"
+              placeholder="Character Name"
+              value={character.name}
+              onChange={(e) => setCharacter({...character, name: e.target.value})}
+              className="profile-input"
+            />
+            
+            <div className="form-row">
+              <select 
+                value={character.species} 
+                onChange={(e) => setCharacter({...character, species: e.target.value})}
+                className="profile-select"
+              >
+                <option value="Human">Human</option>
+                <option value="Elf">Elf</option>
+                <option value="Dwarf">Dwarf</option>
+                <option value="Dragon">Dragon</option>
+                <option value="Wolf">Wolf</option>
+                <option value="Fox">Fox</option>
+                <option value="Cat">Cat</option>
+                <option value="Other">Other</option>
+              </select>
+              
+              <select 
+                value={character.gender} 
+                onChange={(e) => setCharacter({...character, gender: e.target.value})}
+                className="profile-select"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Herm">Herm</option>
+                <option value="Non-binary">Non-binary</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            
+            <textarea
+              placeholder="Character Description"
+              value={character.description}
+              onChange={(e) => setCharacter({...character, description: e.target.value})}
+              className="profile-textarea"
+              rows="4"
+            />
+            
+            <select 
+              value={character.status} 
+              onChange={(e) => setCharacter({...character, status: e.target.value})}
+              className="profile-select"
+            >
+              <option value="Looking for RP">Looking for RP</option>
+              <option value="Busy">Busy</option>
+              <option value="Away">Away</option>
+              <option value="Do Not Disturb">Do Not Disturb</option>
+              <option value="Online">Online</option>
+            </select>
+            
+            <button className="profile-save-btn" onClick={updateProfile}>
+              Save Profile
+            </button>
+          </div>
+        ) : (
+          <div className="profile-view">
+            <div className="character-info">
+              <h4>{profile?.character?.name}</h4>
+              <div className="character-details">
+                <span className="detail-label">Species:</span> {profile?.character?.species}<br />
+                <span className="detail-label">Gender:</span> {profile?.character?.gender}<br />
+                <span className="detail-label">Status:</span> {profile?.character?.status}
+              </div>
+              {profile?.character?.description && (
+                <div className="character-description">
+                  <span className="detail-label">Description:</span>
+                  <p>{profile?.character?.description}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="chat-container">
+    <div className="chat-container fullscreen">
       <div className="chat-header">
-        <h2 className="chat-title">🔥 {import.meta.env.VITE_APP_NAME || "HellverseChat"}</h2>
-        <div className="user-info">
-          <span className="welcome">Welcome, <strong>{user.display}</strong></span>
+        <div className="header-left">
+          <h2 className="chat-title">🔥 HellverseChat</h2>
+          <span className="room-indicator"># {currentRoom}</span>
+        </div>
+        <div className="header-right">
+          <span className="character-name">{character?.name || user.display}</span>
+          <button className="profile-btn" onClick={() => setShowProfile(true)}>
+            Profile
+          </button>
           <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </div>
@@ -329,7 +550,7 @@ function App() {
             <div className="create-room">
               <input
                 type="text"
-                placeholder="New channel name..."
+                placeholder="New channel..."
                 value={newRoomName}
                 onChange={(e) => setNewRoomName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createRoom()}
@@ -340,12 +561,19 @@ function App() {
           </div>
           
           <div className="online-users">
-            <h4>Online Users ({onlineUsers.size})</h4>
+            <h4>Online ({onlineUsers.size})</h4>
             <ul className="user-list">
-              {Array.from(onlineUsers).map(username => (
-                <li key={username} className="online-user">
+              {Array.from(onlineUsers).map(([username, userData]) => (
+                <li 
+                  key={username} 
+                  className="online-user"
+                  onClick={() => viewUserProfile(username)}
+                >
                   <span className="status-dot"></span>
-                  {username}
+                  <div className="user-info">
+                    <div className="user-name">{userData.character?.name || username}</div>
+                    <div className="user-status">{userData.character?.status}</div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -355,10 +583,19 @@ function App() {
         <div className="chat-content">
           <div className="messages-container">
             {messages.map((msg) => (
-              <div key={msg.id} className="message">
-                <span className="message-time">{formatTime(msg.ts)}</span>
-                <span className="message-user">{msg.display}:</span>
-                <span className="message-text">{msg.text}</span>
+              <div key={msg.id} className={`message ${msg.messageType || 'normal'}`}>
+                <div className="message-header">
+                  <span 
+                    className="message-user" 
+                    onClick={() => viewUserProfile(msg.user)}
+                  >
+                    {msg.character?.name || msg.display}
+                  </span>
+                  <span className="message-time">{formatTime(msg.ts)}</span>
+                </div>
+                <div className="message-content">
+                  <span className="message-text">{msg.text}</span>
+                </div>
               </div>
             ))}
             
@@ -372,12 +609,26 @@ function App() {
           </div>
           
           <div className="message-input-container">
+            <select 
+              value={messageType} 
+              onChange={(e) => setMessageType(e.target.value)}
+              className="message-type-select"
+            >
+              <option value="normal">Say</option>
+              <option value="emote">Emote</option>
+              <option value="ooc">OOC</option>
+            </select>
+            
             <input
               type="text"
               value={message}
               onChange={(e) => handleTyping(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder={`Message #${currentRoom}...`}
+              placeholder={
+                messageType === "emote" ? "Describe your action..." :
+                messageType === "ooc" ? "Out of character message..." :
+                `Message #${currentRoom}...`
+              }
               className="message-input"
               disabled={!socket}
             />
@@ -391,6 +642,22 @@ function App() {
           </div>
         </div>
       </div>
+      
+      {showProfile && (
+        <ProfileModal 
+          profile={{ character, display: user.display }} 
+          onClose={() => setShowProfile(false)} 
+          isOwnProfile={true}
+        />
+      )}
+      
+      {viewingProfile && (
+        <ProfileModal 
+          profile={viewingProfile} 
+          onClose={() => setViewingProfile(null)} 
+          isOwnProfile={false}
+        />
+      )}
     </div>
   );
 }

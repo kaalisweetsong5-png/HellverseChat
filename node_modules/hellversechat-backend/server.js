@@ -44,13 +44,26 @@ app.get("/health", (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-  const { username, password, display } = req.body;
+  const { username, password, display, character } = req.body;
   if (!username || !password) return res.status(400).send("missing");
   if (users.has(username)) return res.status(409).send("user exists");
   const hash = await bcrypt.hash(password, 10);
-  users.set(username, { passwordHash: hash, display: display || username });
+  users.set(username, { 
+    passwordHash: hash, 
+    display: display || username,
+    character: character || {
+      name: display || username,
+      avatar: '',
+      species: 'Human',
+      gender: 'Unspecified',
+      age: 'Adult',
+      description: '',
+      preferences: '',
+      status: 'Looking for RP'
+    }
+  });
   const token = jwt.sign({ username }, SECRET);
-  res.json({ token, username });
+  res.json({ token, username, display: display || username, character: users.get(username).character });
 });
 
 app.post("/login", async (req, res) => {
@@ -60,7 +73,34 @@ app.post("/login", async (req, res) => {
   const ok = await bcrypt.compare(password, u.passwordHash);
   if (!ok) return res.status(401).send("invalid");
   const token = jwt.sign({ username }, SECRET);
-  res.json({ token, username, display: u.display });
+  res.json({ token, username, display: u.display, character: u.character });
+});
+
+// Character profile endpoints
+app.get("/profile/:username", (req, res) => {
+  const { username } = req.params;
+  const user = users.get(username);
+  if (!user) return res.status(404).send("user not found");
+  res.json({ username, display: user.display, character: user.character });
+});
+
+app.put("/profile", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const user = users.get(payload.username);
+    if (!user) return res.status(404).send("user not found");
+    
+    const { display, character } = req.body;
+    if (display) user.display = display;
+    if (character) user.character = { ...user.character, ...character };
+    
+    res.json({ username: payload.username, display: user.display, character: user.character });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
 });
 
 // Catch-all handler for production: serve React app for any non-API routes
@@ -100,11 +140,14 @@ io.on("connection", (socket) => {
   socket.join("main");
 
   socket.on("message", (payload) => {
+    const userProfile = users.get(user);
     const msg = {
       id: Date.now(),
       user,
-      display: users.get(user)?.display || user,
+      display: userProfile?.display || user,
+      character: userProfile?.character || null,
       text: payload.text,
+      messageType: payload.messageType || 'normal', // normal, emote, ooc
       ts: new Date().toISOString(),
     };
     io.to(payload.room || "main").emit("message", msg);
