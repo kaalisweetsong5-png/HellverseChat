@@ -308,6 +308,18 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint to check environment
+app.get("/api/debug-env", (req, res) => {
+  res.status(200).json({
+    NODE_ENV: process.env.NODE_ENV,
+    hasEmailUser: !!process.env.EMAIL_USER,
+    hasEmailPass: !!process.env.EMAIL_PASS,
+    port: process.env.PORT,
+    isProduction: isProduction,
+    railwayEnv: process.env.RAILWAY_ENVIRONMENT
+  });
+});
+
 // Email verification endpoints
 app.post("/api/signup-request", async (req, res) => {
   const { username, password, email } = req.body;
