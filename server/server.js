@@ -1,0 +1,113 @@
+import express from "express";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import cors from "cors";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
+
+const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+
+const users = new Map();
+const socketsByUser = new Map();
+
+const app = express();
+app.use(cors({
+  origin: CORS_ORIGIN,
+  credentials: true
+}));
+app.use(express.json());
+
+app.post("/signup", async (req, res) => {
+  const { username, password, display } = req.body;
+  if (!username || !password) return res.status(400).send("missing");
+  if (users.has(username)) return res.status(409).send("user exists");
+  const hash = await bcrypt.hash(password, 10);
+  users.set(username, { passwordHash: hash, display: display || username });
+  const token = jwt.sign({ username }, SECRET);
+  res.json({ token, username });
+});
+
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+  const u = users.get(username);
+  if (!u) return res.status(401).send("invalid");
+  const ok = await bcrypt.compare(password, u.passwordHash);
+  if (!ok) return res.status(401).send("invalid");
+  const token = jwt.sign({ username }, SECRET);
+  res.json({ token, username, display: u.display });
+});
+
+const server = http.createServer(app);
+const io = new SocketIOServer(server, { 
+  cors: { 
+    origin: CORS_ORIGIN,
+    credentials: true
+  } 
+});
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("auth required"));
+  try {
+    const payload = jwt.verify(token, SECRET);
+    socket.data.username = payload.username;
+    return next();
+  } catch (e) {
+    return next(new Error("invalid token"));
+  }
+});
+
+io.on("connection", (socket) => {
+  const user = socket.data.username;
+  socketsByUser.set(user, socket.id);
+
+  io.emit("presence", { user, status: "online" });
+
+  socket.join("main");
+
+  socket.on("message", (payload) => {
+    const msg = {
+      id: Date.now(),
+      user,
+      display: users.get(user)?.display || user,
+      text: payload.text,
+      ts: new Date().toISOString(),
+    };
+    io.to(payload.room || "main").emit("message", msg);
+  });
+
+  socket.on("typing", ({ room, typing }) => {
+    socket.to(room || "main").emit("typing", { user, typing });
+  });
+
+  socket.on("join_room", ({ room }) => {
+    // Leave all rooms except the socket's own room
+    Array.from(socket.rooms).forEach(r => {
+      if (r !== socket.id) {
+        socket.leave(r);
+      }
+    });
+    
+    // Join the new room
+    socket.join(room);
+    console.log(`${user} joined room: ${room}`);
+  });
+
+  socket.on("disconnect", () => {
+    socketsByUser.delete(user);
+    io.emit("presence", { user, status: "offline" });
+  });
+});
+
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on all interfaces at port ${PORT}`);
+  console.log(`Local access: http://localhost:${PORT}`);
+  console.log(`Network access: http://[your-ip]:${PORT}`);
+});

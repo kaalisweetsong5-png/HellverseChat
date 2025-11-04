@@ -1,0 +1,53 @@
+name: Deploy HellverseChat
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: |
+          server/package-lock.json
+          server/client/client/package-lock.json
+    
+    - name: Install server dependencies
+      run: |
+        cd server
+        npm ci
+    
+    - name: Install client dependencies
+      run: |
+        cd server/client/client
+        npm ci
+    
+    - name: Build client
+      run: |
+        cd server/client/client
+        npm run build
+      env:
+        VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        VITE_APP_NAME: HellverseChat
+    
+    - name: Deploy to Railway
+      if: github.ref == 'refs/heads/main'
+      uses: railway-deploy-action@v1
+      with:
+        railway_token: ${{ secrets.RAILWAY_TOKEN }}
+        service: ${{ secrets.RAILWAY_SERVICE }}
+      env:
+        NODE_ENV: production
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        CLIENT_URL: ${{ secrets.CLIENT_URL }}
+        CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}

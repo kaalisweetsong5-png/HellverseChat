@@ -1,0 +1,17 @@
+# Railway Deployment Configuration
+# Visit: https://railway.app
+
+[build]
+  builder = "NIXPACKS"
+
+[deploy]
+  startCommand = "npm start"
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 10
+
+[variables]
+  NODE_ENV = "production"
+  PORT = { { PORT } }
+  JWT_SECRET = { { JWT_SECRET } }
+  CLIENT_URL = "https://www.hellversechat.com"
+  CORS_ORIGIN = "https://www.hellversechat.com"
