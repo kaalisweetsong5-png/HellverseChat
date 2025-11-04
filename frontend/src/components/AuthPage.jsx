@@ -8,25 +8,24 @@ function AuthPage() {
   const location = useLocation();
   const isSignup = location.pathname === '/signup';
   
-  // Server config - ensure we use the correct domain
+  // Server config - always use working domain in production
   const getDefaultServerUrl = () => {
     if (!import.meta.env.PROD) {
       return "http://localhost:4000";
     }
     
-    // In production, always use relative URLs but ensure we're on the right domain
-    const currentHost = window.location.host;
-    if (currentHost === 'hellversechat.com') {
-      // Redirect to www version since that's where Railway points
-      const newUrl = window.location.href.replace('hellversechat.com', 'www.hellversechat.com');
-      window.location.replace(newUrl);
-      return "";
-    }
-    
-    return import.meta.env.VITE_API_URL || "";
+    // In production, always use the full working URL to avoid DNS issues
+    return import.meta.env.VITE_API_URL || "https://www.hellversechat.com";
   };
   
   const defaultServerUrl = getDefaultServerUrl();
+  
+  // Clear any cached serverUrl that might be using the broken domain
+  const storedServerUrl = localStorage.getItem("serverUrl");
+  if (storedServerUrl && storedServerUrl.includes('hellversechat.com') && !storedServerUrl.includes('www.')) {
+    localStorage.removeItem("serverUrl");
+  }
+  
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("serverUrl") || defaultServerUrl);
   
   // Debug logging
@@ -36,6 +35,7 @@ function AuthPage() {
     currentHost: window.location.host,
     defaultServerUrl,
     serverUrl,
+    storedServerUrl,
     fullUrl: `${serverUrl}/signup`
   });
   const [showServerConfig, setShowServerConfig] = useState(false);

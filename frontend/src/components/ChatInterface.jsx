@@ -11,9 +11,9 @@ function ChatInterface({ user, onLogout }) {
   const [showBanDialog, setShowBanDialog] = useState(false);
   const [banTarget, setBanTarget] = useState("");
   
-  // Server config - use relative URLs in production, localhost in development
+  // Server config - always use working domain in production
   const defaultServerUrl = import.meta.env.VITE_API_URL || 
-    (import.meta.env.PROD ? "" : "http://localhost:4000");
+    (import.meta.env.PROD ? "https://www.hellversechat.com" : "http://localhost:4000");
   const [serverUrl] = useState(localStorage.getItem("serverUrl") || defaultServerUrl);
   
   // Enhanced character profile states
