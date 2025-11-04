@@ -28,6 +28,7 @@
   "author": "HellverseChat Team",
   "license": "MIT",
   "dependencies": {
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "nodemailer": "^7.0.10"
   }
 }

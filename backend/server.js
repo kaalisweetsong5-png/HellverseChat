@@ -217,7 +217,7 @@ const sendWithResend = async (email, code) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'HellverseChat <onboarding@resend.dev>',
+        from: process.env.RESEND_FROM_EMAIL || 'HellverseChat <onboarding@resend.dev>',
         to: [email],
         subject: 'HellverseChat - Verify Your Account',
         html: getEmailTemplate(code)
@@ -445,7 +445,7 @@ app.get("/api/test-email", async (req, res) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'HellverseChat <onboarding@resend.dev>',
+            from: process.env.RESEND_FROM_EMAIL || 'HellverseChat <onboarding@resend.dev>',
             to: ['test@example.com'],
             subject: 'Test Email',
             html: '<p>Test</p>'
