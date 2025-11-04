@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import LandingPage from "./components/LandingPage";
 import AuthPage from "./components/AuthPage";
-import CharacterSelection from "./components/CharacterSelection";
+import Dashboard from "./components/Dashboard";
 import ChatInterface from "./components/ChatInterface";
 import "./App.css";
 
@@ -103,8 +103,8 @@ function App() {
           element={
             isAuthenticated ? (
               <>
-                {console.log('🔄 Redirecting to /characters from /')}
-                <Navigate to="/characters" replace />
+                {console.log('🔄 Redirecting to /dashboard from /')}
+                <Navigate to="/dashboard" replace />
               </>
             ) : (
               <>
@@ -119,24 +119,24 @@ function App() {
         <Route 
           path="/login" 
           element={
-            isAuthenticated ? <Navigate to="/characters" replace /> : <AuthPage />
+            isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage />
           } 
         />
         <Route 
           path="/signup" 
           element={
-            isAuthenticated ? <Navigate to="/characters" replace /> : <AuthPage />
+            isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage />
           } 
         />
         
-        {/* Character Selection */}
+        {/* Dashboard */}
         <Route 
-          path="/characters" 
+          path="/dashboard" 
           element={
             isAuthenticated ? (
               <>
-                {console.log('👥 Loading character selection for:', user?.username)}
-                <CharacterSelection 
+                {console.log('🏠 Loading dashboard for:', user?.username)}
+                <Dashboard 
                   user={user}
                   onCharacterSelect={handleCharacterSelect}
                   onLogout={handleLogout}
@@ -144,11 +144,17 @@ function App() {
               </>
             ) : (
               <>
-                {console.log('🚫 Not authenticated, redirecting to home from /characters')}
+                {console.log('🚫 Not authenticated, redirecting to home from /dashboard')}
                 <Navigate to="/" replace />
               </>
             )
           } 
+        />
+
+        {/* Keep legacy route for backward compatibility */}
+        <Route 
+          path="/characters" 
+          element={<Navigate to="/dashboard" replace />} 
         />
         
         {/* Chat Interface */}
@@ -166,8 +172,8 @@ function App() {
               </>
             ) : isAuthenticated ? (
               <>
-                {console.log('🎭 No character selected, redirecting to characters')}
-                <Navigate to="/characters" replace />
+                {console.log('🎭 No character selected, redirecting to dashboard')}
+                <Navigate to="/dashboard" replace />
               </>
             ) : (
               <>
