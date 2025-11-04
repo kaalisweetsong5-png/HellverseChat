@@ -29,7 +29,7 @@ const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
 // Admin configuration - add your username here
 const ADMIN_USERS = new Set([
   process.env.ADMIN_USERNAME || "admin", // Set via environment variable
-  "HellchatAdmins", // Default admin - change this to your username
+  "HellchatAdmin", // Default admin - change this to your username
 ]);
 
 // Helper functions

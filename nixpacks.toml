@@ -3,10 +3,17 @@
 nixPkgs = ['nodejs', 'npm']
 
 [phases.install]
-cmds = ['npm install --prefix backend', 'npm install --prefix frontend']
+cmds = [
+  'ls -la',
+  'npm install --prefix backend',
+  'test -d frontend && npm install --prefix frontend || echo "Frontend directory not found"'
+]
 
 [phases.build]
-cmds = ['cd frontend && npm run build']
+cmds = [
+  'ls -la',
+  'test -d frontend && cd frontend && npm run build || echo "Skipping frontend build - directory not found"'
+]
 
 [start]
 cmd = 'node backend/server.js'
