@@ -31,16 +31,12 @@ function App() {
       const serverUrl = localStorage.getItem("serverUrl") || getServerUrl();
       const apiUrl = serverUrl ? `${serverUrl}/api/maintenance` : '/api/maintenance';
       
-      console.log('🔧 Checking maintenance mode at:', apiUrl);
       const response = await fetch(apiUrl);
-      console.log('🔧 Maintenance response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('🔧 Maintenance data:', data);
         setMaintenanceMode(data.maintenanceMode);
         setMaintenanceInfo(data);
-        console.log('🔧 Set maintenance mode to:', data.maintenanceMode);
       } else {
         console.warn('Could not check maintenance status:', response.status, response.statusText);
       }
@@ -150,7 +146,6 @@ function App() {
 
   // Show maintenance page if maintenance mode is active
   if (maintenanceMode) {
-    console.log('🔧 Rendering MaintenancePage with info:', maintenanceInfo);
     return <MaintenancePage maintenanceInfo={maintenanceInfo} />;
   }
 
