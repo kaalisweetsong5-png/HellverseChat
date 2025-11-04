@@ -12,6 +12,14 @@ function AuthPage() {
   const defaultServerUrl = import.meta.env.VITE_API_URL || 
     (import.meta.env.PROD ? "" : "http://localhost:4000");
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("serverUrl") || defaultServerUrl);
+  
+  // Debug logging
+  console.log('🔧 Environment:', {
+    VITE_API_URL: import.meta.env.VITE_API_URL,
+    PROD: import.meta.env.PROD,
+    defaultServerUrl,
+    serverUrl
+  });
   const [showServerConfig, setShowServerConfig] = useState(false);
   
   // Auth form states
@@ -72,20 +80,29 @@ function AuthPage() {
       : { username: username.trim(), password };
 
     try {
-      const response = await fetch(`${serverUrl}${endpoint}`, {
+      const fullUrl = `${serverUrl}${endpoint}`;
+      console.log('🚀 Making request to:', fullUrl);
+      console.log('📦 Request body:', JSON.stringify(body, null, 2));
+      
+      const response = await fetch(fullUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
 
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
         const error = await response.text();
+        console.error('❌ Response error:', error);
         throw new Error(error === "missing" ? "Please fill all fields" : 
                        error === "user exists" ? "Username already taken" : 
                        error === "invalid" ? "Invalid credentials" : error);
       }
 
       const data = await response.json();
+      console.log('✅ Success response:', data);
       
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data));
@@ -94,6 +111,9 @@ function AuthPage() {
       navigate('/chat');
       
     } catch (error) {
+      console.error('💥 Fetch error:', error);
+      console.error('💥 Error type:', error.constructor.name);
+      console.error('💥 Error message:', error.message);
       setAuthError(error.message);
     } finally {
       setIsLoading(false);
