@@ -10,6 +10,9 @@ function App() {
   const [showServerConfig, setShowServerConfig] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showBanDialog, setShowBanDialog] = useState(false);
+  const [banTarget, setBanTarget] = useState("");
   
   // Server config
   const defaultServerUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -42,6 +45,7 @@ function App() {
   const [rooms, setRooms] = useState(["main", "general", "adult", "fantasy", "sci-fi"]);
   const [newRoomName, setNewRoomName] = useState("");
   const [messageType, setMessageType] = useState("normal"); // normal, emote, ooc
+  const [adminChannelName, setAdminChannelName] = useState("");
   
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -68,16 +72,66 @@ function App() {
       setMessages(prev => [...prev, msg]);
     });
 
-    newSocket.on("presence", ({ user, status, character }) => {
+    newSocket.on("presence", ({ user, status, character, isAdmin }) => {
       setOnlineUsers(prev => {
         const newMap = new Map(prev);
         if (status === "online") {
-          newMap.set(user, { character: character || null });
+          newMap.set(user, { character: character || null, isAdmin: isAdmin || false });
         } else {
           newMap.delete(user);
         }
         return newMap;
       });
+    });
+
+    newSocket.on("channels_list", ({ channels }) => {
+      setRooms(channels);
+    });
+
+    newSocket.on("channel_created", ({ name, creator }) => {
+      setRooms(prev => [...prev, name]);
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        user: "system",
+        display: "System",
+        character: { name: "System" },
+        text: `Channel #${name} created by ${creator}`,
+        messageType: "system",
+        ts: new Date().toISOString()
+      }]);
+    });
+
+    newSocket.on("channel_deleted", ({ name, deleter }) => {
+      setRooms(prev => prev.filter(room => room !== name));
+      if (currentRoom === name) {
+        setCurrentRoom("main");
+      }
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        user: "system", 
+        display: "System",
+        character: { name: "System" },
+        text: `Channel #${name} deleted by ${deleter}`,
+        messageType: "system",
+        ts: new Date().toISOString()
+      }]);
+    });
+
+    newSocket.on("user_banned", ({ username, bannedBy }) => {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        user: "system",
+        display: "System", 
+        character: { name: "System" },
+        text: `${username} was banned by ${bannedBy}`,
+        messageType: "system",
+        ts: new Date().toISOString()
+      }]);
+    });
+
+    newSocket.on("banned", ({ reason }) => {
+      alert(`You have been banned: ${reason}`);
+      handleLogout();
     });
 
     newSocket.on("typing", ({ user, typing }) => {
@@ -228,6 +282,27 @@ function App() {
       }
     } catch (error) {
       console.error("Failed to load profile:", error);
+    }
+  };
+
+  // Admin functions
+  const banUser = (username) => {
+    if (!user?.isAdmin || !socket) return;
+    socket.emit("admin_ban", { targetUser: username });
+    setBanTarget("");
+    setShowBanDialog(false);
+  };
+
+  const createAdminChannel = () => {
+    if (!user?.isAdmin || !socket || !adminChannelName.trim()) return;
+    socket.emit("admin_create_channel", { name: adminChannelName.trim() });
+    setAdminChannelName("");
+  };
+
+  const deleteChannel = (channelName) => {
+    if (!user?.isAdmin || !socket || channelName === "main") return;
+    if (confirm(`Are you sure you want to delete #${channelName}?`)) {
+      socket.emit("admin_delete_channel", { name: channelName });
     }
   };
 
@@ -421,7 +496,75 @@ function App() {
     );
   }
 
-  // Profile Modal Component
+  // Admin Panel Component
+  const AdminPanel = ({ onClose }) => (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content admin-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>👑 Admin Panel</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        <div className="admin-sections">
+          <div className="admin-section">
+            <h4>Channel Management</h4>
+            <div className="admin-form">
+              <input
+                type="text"
+                placeholder="New channel name..."
+                value={adminChannelName}
+                onChange={(e) => setAdminChannelName(e.target.value)}
+                className="admin-input"
+                onKeyDown={(e) => e.key === "Enter" && createAdminChannel()}
+              />
+              <button onClick={createAdminChannel} className="admin-btn create">
+                Create Channel
+              </button>
+            </div>
+            
+            <div className="channel-list">
+              <h5>Current Channels:</h5>
+              {rooms.map(room => (
+                <div key={room} className="channel-item">
+                  <span>#{room}</span>
+                  {room !== "main" && (
+                    <button 
+                      onClick={() => deleteChannel(room)}
+                      className="admin-btn delete-small"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="admin-section">
+            <h4>User Moderation</h4>
+            <div className="admin-form">
+              <input
+                type="text"
+                placeholder="Username to ban..."
+                value={banTarget}
+                onChange={(e) => setBanTarget(e.target.value)}
+                className="admin-input"
+                onKeyDown={(e) => e.key === "Enter" && banUser(banTarget)}
+              />
+              <button 
+                onClick={() => banUser(banTarget)} 
+                className="admin-btn ban"
+              >
+                Ban User
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Profile Modal Component  
   const ProfileModal = ({ profile, onClose, isOwnProfile = false }) => (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -523,10 +666,18 @@ function App() {
           <span className="room-indicator"># {currentRoom}</span>
         </div>
         <div className="header-right">
-          <span className="character-name">{character?.name || user.display}</span>
+          <span className="character-name">
+            {user?.isAdmin && <span className="crown">👑 </span>}
+            {character?.name || user.display}
+          </span>
           <button className="profile-btn" onClick={() => setShowProfile(true)}>
             Profile
           </button>
+          {user?.isAdmin && (
+            <button className="admin-btn-header" onClick={() => setShowAdminPanel(true)}>
+              👑 Admin
+            </button>
+          )}
           <button className="logout-btn" onClick={handleLogout}>Logout</button>
         </div>
       </div>
@@ -568,10 +719,21 @@ function App() {
                   key={username} 
                   className="online-user"
                   onClick={() => viewUserProfile(username)}
+                  onContextMenu={(e) => {
+                    if (user?.isAdmin && username !== user.username) {
+                      e.preventDefault();
+                      setBanTarget(username);
+                      setShowBanDialog(true);
+                    }
+                  }}
+                  title={user?.isAdmin && username !== user.username ? "Right-click to ban" : ""}
                 >
                   <span className="status-dot"></span>
                   <div className="user-info">
-                    <div className="user-name">{userData.character?.name || username}</div>
+                    <div className="user-name">
+                      {userData.isAdmin && <span className="crown">👑 </span>}
+                      {userData.character?.name || username}
+                    </div>
                     <div className="user-status">{userData.character?.status}</div>
                   </div>
                 </li>
@@ -587,14 +749,21 @@ function App() {
                 <div className="message-header">
                   <span 
                     className="message-user" 
-                    onClick={() => viewUserProfile(msg.user)}
+                    onClick={() => msg.user !== "system" && viewUserProfile(msg.user)}
                   >
+                    {msg.isAdmin && <span className="crown">👑 </span>}
                     {msg.character?.name || msg.display}
                   </span>
                   <span className="message-time">{formatTime(msg.ts)}</span>
                 </div>
                 <div className="message-content">
-                  <span className="message-text">{msg.text}</span>
+                  <span className={`message-text ${msg.messageType === 'emote' ? 'emote-text' : ''} ${msg.messageType === 'ooc' ? 'ooc-text' : ''}`}>
+                    {msg.messageType === 'emote' && '*'}
+                    {msg.messageType === 'ooc' && '(( '}
+                    {msg.text}
+                    {msg.messageType === 'ooc' && ' ))'}
+                    {msg.messageType === 'emote' && '*'}
+                  </span>
                 </div>
               </div>
             ))}
@@ -657,6 +826,39 @@ function App() {
           onClose={() => setViewingProfile(null)} 
           isOwnProfile={false}
         />
+      )}
+      
+      {showAdminPanel && user?.isAdmin && (
+        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+      )}
+      
+      {showBanDialog && (
+        <div className="modal-overlay" onClick={() => setShowBanDialog(false)}>
+          <div className="modal-content ban-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>⚠️ Ban User</h3>
+              <button className="modal-close" onClick={() => setShowBanDialog(false)}>×</button>
+            </div>
+            <div className="ban-content">
+              <p>Are you sure you want to ban <strong>{banTarget}</strong>?</p>
+              <p>This action will immediately disconnect them and prevent them from rejoining.</p>
+              <div className="ban-actions">
+                <button 
+                  onClick={() => setShowBanDialog(false)} 
+                  className="admin-btn cancel"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => banUser(banTarget)} 
+                  className="admin-btn ban"
+                >
+                  Ban User
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

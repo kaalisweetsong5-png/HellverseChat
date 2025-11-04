@@ -23,6 +23,18 @@ const __dirname = path.dirname(__filename);
 
 const users = new Map();
 const socketsByUser = new Map();
+const bannedUsers = new Set();
+const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
+
+// Admin configuration - add your username here
+const ADMIN_USERS = new Set([
+  process.env.ADMIN_USERNAME || "admin", // Set via environment variable
+  "HellchatAdmins", // Default admin - change this to your username
+]);
+
+// Helper functions
+const isAdmin = (username) => ADMIN_USERS.has(username);
+const isBanned = (username) => bannedUsers.has(username);
 
 const app = express();
 app.use(cors({
@@ -47,10 +59,13 @@ app.post("/signup", async (req, res) => {
   const { username, password, display, character } = req.body;
   if (!username || !password) return res.status(400).send("missing");
   if (users.has(username)) return res.status(409).send("user exists");
+  if (isBanned(username)) return res.status(403).send("banned");
+  
   const hash = await bcrypt.hash(password, 10);
-  users.set(username, { 
+  const userData = { 
     passwordHash: hash, 
     display: display || username,
+    isAdmin: isAdmin(username),
     character: character || {
       name: display || username,
       avatar: '',
@@ -61,19 +76,39 @@ app.post("/signup", async (req, res) => {
       preferences: '',
       status: 'Looking for RP'
     }
-  });
+  };
+  users.set(username, userData);
+  
   const token = jwt.sign({ username }, SECRET);
-  res.json({ token, username, display: display || username, character: users.get(username).character });
+  res.json({ 
+    token, 
+    username, 
+    display: userData.display, 
+    character: userData.character,
+    isAdmin: userData.isAdmin 
+  });
 });
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   const u = users.get(username);
   if (!u) return res.status(401).send("invalid");
+  if (isBanned(username)) return res.status(403).send("banned");
+  
   const ok = await bcrypt.compare(password, u.passwordHash);
   if (!ok) return res.status(401).send("invalid");
+  
+  // Update admin status in case it changed
+  u.isAdmin = isAdmin(username);
+  
   const token = jwt.sign({ username }, SECRET);
-  res.json({ token, username, display: u.display, character: u.character });
+  res.json({ 
+    token, 
+    username, 
+    display: u.display, 
+    character: u.character,
+    isAdmin: u.isAdmin 
+  });
 });
 
 // Character profile endpoints
@@ -97,10 +132,110 @@ app.put("/profile", (req, res) => {
     if (display) user.display = display;
     if (character) user.character = { ...user.character, ...character };
     
-    res.json({ username: payload.username, display: user.display, character: user.character });
+    res.json({ 
+      username: payload.username, 
+      display: user.display, 
+      character: user.character,
+      isAdmin: user.isAdmin 
+    });
   } catch (e) {
     return res.status(401).send("invalid token");
   }
+});
+
+// Admin endpoints
+app.post("/admin/ban", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { username } = req.body;
+    if (!username) return res.status(400).send("username required");
+    if (isAdmin(username)) return res.status(403).send("cannot ban admin");
+    
+    bannedUsers.add(username);
+    
+    // Disconnect banned user if online
+    const socketId = socketsByUser.get(username);
+    if (socketId) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit("banned", { reason: "You have been banned by an administrator" });
+        socket.disconnect(true);
+      }
+    }
+    
+    res.json({ success: true, message: `User ${username} has been banned` });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.post("/admin/unban", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { username } = req.body;
+    if (!username) return res.status(400).send("username required");
+    
+    bannedUsers.delete(username);
+    res.json({ success: true, message: `User ${username} has been unbanned` });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.post("/admin/channel", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { name } = req.body;
+    if (!name) return res.status(400).send("channel name required");
+    
+    channels.add(name.toLowerCase());
+    io.emit("channel_created", { name: name.toLowerCase(), creator: payload.username });
+    res.json({ success: true, message: `Channel #${name} created` });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.delete("/admin/channel/:name", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { name } = req.params;
+    if (name === "main") return res.status(400).send("cannot delete main channel");
+    
+    channels.delete(name);
+    io.emit("channel_deleted", { name, deleter: payload.username });
+    res.json({ success: true, message: `Channel #${name} deleted` });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.get("/channels", (req, res) => {
+  res.json({ channels: Array.from(channels) });
 });
 
 // Catch-all handler for production: serve React app for any non-API routes
@@ -133,24 +268,102 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
   const user = socket.data.username;
+  const userData = users.get(user);
+  
+  if (isBanned(user)) {
+    socket.emit("banned", { reason: "You are banned from this server" });
+    socket.disconnect(true);
+    return;
+  }
+  
   socketsByUser.set(user, socket.id);
 
-  io.emit("presence", { user, status: "online" });
+  io.emit("presence", { 
+    user, 
+    status: "online", 
+    character: userData?.character,
+    isAdmin: userData?.isAdmin || false 
+  });
 
   socket.join("main");
 
+  // Send current channel list to new user
+  socket.emit("channels_list", { channels: Array.from(channels) });
+
   socket.on("message", (payload) => {
     const userProfile = users.get(user);
+    if (isBanned(user)) {
+      socket.emit("banned", { reason: "You are banned from this server" });
+      socket.disconnect(true);
+      return;
+    }
+    
     const msg = {
       id: Date.now(),
       user,
       display: userProfile?.display || user,
       character: userProfile?.character || null,
+      isAdmin: userProfile?.isAdmin || false,
       text: payload.text,
       messageType: payload.messageType || 'normal', // normal, emote, ooc
       ts: new Date().toISOString(),
     };
     io.to(payload.room || "main").emit("message", msg);
+  });
+
+  // Admin actions via socket
+  socket.on("admin_ban", (payload) => {
+    const adminUser = users.get(user);
+    if (!adminUser?.isAdmin) return;
+    
+    const { targetUser } = payload;
+    if (isAdmin(targetUser)) return; // Cannot ban other admins
+    
+    bannedUsers.add(targetUser);
+    
+    // Disconnect banned user
+    const targetSocketId = socketsByUser.get(targetUser);
+    if (targetSocketId) {
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      if (targetSocket) {
+        targetSocket.emit("banned", { reason: `You have been banned by ${adminUser.character?.name || user}` });
+        targetSocket.disconnect(true);
+      }
+    }
+    
+    io.emit("user_banned", { 
+      username: targetUser, 
+      bannedBy: adminUser.character?.name || user 
+    });
+  });
+
+  socket.on("admin_create_channel", (payload) => {
+    const adminUser = users.get(user);
+    if (!adminUser?.isAdmin) return;
+    
+    const { name } = payload;
+    if (!name) return;
+    
+    const channelName = name.toLowerCase().trim();
+    channels.add(channelName);
+    io.emit("channel_created", { 
+      name: channelName, 
+      creator: adminUser.character?.name || user 
+    });
+  });
+
+  socket.on("admin_delete_channel", (payload) => {
+    const adminUser = users.get(user);
+    if (!adminUser?.isAdmin) return;
+    
+    const { name } = payload;
+    if (!name || name === "main") return; // Cannot delete main channel
+    
+    channels.delete(name);
+    io.emit("channel_deleted", { 
+      name, 
+      deleter: adminUser.character?.name || user 
+    });
   });
 
   socket.on("typing", ({ room, typing }) => {
@@ -172,7 +385,13 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     socketsByUser.delete(user);
-    io.emit("presence", { user, status: "offline" });
+    const userData = users.get(user);
+    io.emit("presence", { 
+      user, 
+      status: "offline",
+      character: userData?.character,
+      isAdmin: userData?.isAdmin || false 
+    });
   });
 });
 
