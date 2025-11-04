@@ -15,6 +15,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceInfo, setMaintenanceInfo] = useState(null);
+  const [maintenanceChecked, setMaintenanceChecked] = useState(false);
 
   // Check maintenance mode
   const checkMaintenanceMode = async () => {
@@ -30,66 +31,78 @@ function App() {
       const serverUrl = localStorage.getItem("serverUrl") || getServerUrl();
       const apiUrl = serverUrl ? `${serverUrl}/api/maintenance` : '/api/maintenance';
       
+      console.log('🔧 Checking maintenance mode at:', apiUrl);
       const response = await fetch(apiUrl);
+      console.log('🔧 Maintenance response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('🔧 Maintenance data:', data);
         setMaintenanceMode(data.maintenanceMode);
         setMaintenanceInfo(data);
+        console.log('🔧 Set maintenance mode to:', data.maintenanceMode);
       } else {
-        console.warn('Could not check maintenance status');
+        console.warn('Could not check maintenance status:', response.status, response.statusText);
       }
     } catch (error) {
       console.warn('Maintenance check failed:', error);
+    } finally {
+      setMaintenanceChecked(true);
     }
   };
 
   useEffect(() => {
-    // Check maintenance mode first
-    checkMaintenanceMode();
-    // Check for existing authentication
-    const token = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    const storedCharacter = localStorage.getItem("selectedCharacter");
-    
-    console.log('🔐 Auth Check:', {
-      hasToken: !!token,
-      hasStoredUser: !!storedUser,
-      hasStoredCharacter: !!storedCharacter,
-      tokenLength: token?.length,
-      storedUserPreview: storedUser?.substring(0, 50) + '...'
-    });
-    
-    if (token && storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        console.log('✅ Parsed user data:', userData);
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        // Restore selected character if available
-        if (storedCharacter) {
-          try {
-            const characterData = JSON.parse(storedCharacter);
-            setSelectedCharacter(characterData);
-            console.log('👤 Restored character:', characterData.name);
-          } catch (charError) {
-            console.error("❌ Error parsing stored character:", charError);
-            localStorage.removeItem("selectedCharacter");
+    const initializeApp = async () => {
+      // Check maintenance mode first
+      await checkMaintenanceMode();
+      
+      // Check for existing authentication
+      const token = localStorage.getItem("token");
+      const storedUser = localStorage.getItem("user");
+      const storedCharacter = localStorage.getItem("selectedCharacter");
+      
+      console.log('🔐 Auth Check:', {
+        hasToken: !!token,
+        hasStoredUser: !!storedUser,
+        hasStoredCharacter: !!storedCharacter,
+        tokenLength: token?.length,
+        storedUserPreview: storedUser?.substring(0, 50) + '...'
+      });
+      
+      if (token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          console.log('✅ Parsed user data:', userData);
+          setUser(userData);
+          setIsAuthenticated(true);
+          
+          // Restore selected character if available
+          if (storedCharacter) {
+            try {
+              const characterData = JSON.parse(storedCharacter);
+              setSelectedCharacter(characterData);
+              console.log('👤 Restored character:', characterData.name);
+            } catch (charError) {
+              console.error("❌ Error parsing stored character:", charError);
+              localStorage.removeItem("selectedCharacter");
+            }
           }
+          
+          console.log('🎯 Setting authenticated to true');
+        } catch (error) {
+          console.error("❌ Error parsing stored user data:", error);
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          localStorage.removeItem("selectedCharacter");
         }
-        
-        console.log('🎯 Setting authenticated to true');
-      } catch (error) {
-        console.error("❌ Error parsing stored user data:", error);
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        localStorage.removeItem("selectedCharacter");
+      } else {
+        console.log('❌ No valid auth data found');
       }
-    } else {
-      console.log('❌ No valid auth data found');
-    }
+      
+      setIsLoading(false);
+    };
     
-    setIsLoading(false);
+    initializeApp();
     
     // Set up periodic maintenance check (every 30 seconds)
     const maintenanceInterval = setInterval(() => {
@@ -115,7 +128,7 @@ function App() {
     navigate("/chat");
   };
 
-  if (isLoading) {
+  if (isLoading || !maintenanceChecked) {
     console.log('⏳ App is loading...');
     return (
       <div className="loading-screen">
@@ -131,11 +144,13 @@ function App() {
     isAuthenticated,
     user: user?.username || 'none',
     currentPath: window.location.pathname,
-    maintenanceMode
+    maintenanceMode,
+    maintenanceInfo
   });
 
   // Show maintenance page if maintenance mode is active
   if (maintenanceMode) {
+    console.log('🔧 Rendering MaintenancePage with info:', maintenanceInfo);
     return <MaintenancePage maintenanceInfo={maintenanceInfo} />;
   }
 

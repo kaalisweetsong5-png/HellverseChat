@@ -1,0 +1,12 @@
+{
+  "users": {
+    "HellverseAdmin": {
+      "passwordHash": "$2b$10$mHLh.JWyFNRRQ4DXuXaspO39KP.r3DXzzJZJMgJ5kgA92V2fAn9n.",
+      "email": "admin@hellversechat.com",
+      "isAdmin": true,
+      "characters": {},
+      "createdAt": "2025-11-04T23:26:55.821Z"
+    }
+  },
+  "characters": {}
+}

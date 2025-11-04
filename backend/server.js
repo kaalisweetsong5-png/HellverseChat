@@ -39,12 +39,23 @@ const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true' || false;
 const MAINTENANCE_MESSAGE = process.env.MAINTENANCE_MESSAGE || 'HellverseChat is currently undergoing maintenance. Please check back soon!';
 const MAINTENANCE_ETA = process.env.MAINTENANCE_ETA || null;
+
+console.log('🔧 Maintenance Configuration:', {
+  MAINTENANCE_MODE: MAINTENANCE_MODE,
+  MAINTENANCE_MODE_RAW: process.env.MAINTENANCE_MODE,
+  MAINTENANCE_MESSAGE: MAINTENANCE_MESSAGE,
+  MAINTENANCE_ETA: MAINTENANCE_ETA
+});
 const CORS_ORIGIN = isProduction 
   ? (origin, callback) => {
       // Allow same origin requests (when frontend and backend are on same domain)
       if (!origin) return callback(null, true);
       // Allow Railway domains and custom domains
       if (origin.includes('railway.app') || origin.includes('hellversechat.com')) {
+        return callback(null, true);
+      }
+      // Allow localhost for development/testing
+      if (origin && origin.includes('localhost')) {
         return callback(null, true);
       }
       callback(new Error('Not allowed by CORS'));
