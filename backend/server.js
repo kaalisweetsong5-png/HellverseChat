@@ -279,31 +279,38 @@ const sendVerificationEmail = async (email, code) => {
     hasResendKey: !!process.env.RESEND_API_KEY
   });
 
-  // Check for service-based email providers first
+  // Priority: Gmail/SMTP first (more reliable for public signups)
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    console.log('📧 Using Gmail/SMTP for email sending...');
+    return await sendWithSMTP(email, code);
+  }
+
+  // Fallback to Resend if configured
   if (process.env.RESEND_API_KEY) {
     console.log('📧 Using Resend API for email sending...');
     return await sendWithResend(email, code);
   }
 
-  // For development/testing, log the code
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
-    console.log(`📧 [DEV MODE] Verification code: ${code}`);
-    console.log(`📧 [DEV MODE] Email Options:`);
-    console.log(`📧 [DEV MODE] 1. Personal Gmail: Set EMAIL_USER and EMAIL_PASS`);
-    console.log(`📧 [DEV MODE] 2. Resend Service: Set RESEND_API_KEY (recommended for production)`);
-    console.log(`📧 [DEV MODE] 3. SendGrid: Set SENDGRID_API_KEY`);
-    return Promise.resolve();
-  }
+  // Development mode
+  console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
+  console.log(`📧 [DEV MODE] Verification code: ${code}`);
+  console.log(`📧 [DEV MODE] Email Options:`);
+  console.log(`📧 [DEV MODE] 1. Gmail (Recommended): Set EMAIL_USER and EMAIL_PASS`);
+  console.log(`📧 [DEV MODE] 2. Resend Service: Set RESEND_API_KEY`);
+  console.log(`📧 [DEV MODE] 3. Other providers: Auto-detected from EMAIL_USER domain`);
+  return Promise.resolve();
+};
 
-  console.log('📧 Email credentials found, getting config...');
+// SMTP-based email sending (Gmail, Outlook, Yahoo, etc.)
+const sendWithSMTP = async (email, code) => {
+  console.log('📧 SMTP: Getting email configuration...');
   const emailConfig = getEmailConfig(process.env.EMAIL_USER);
-  console.log('📧 Email config created:', JSON.stringify(emailConfig, null, 2));
+  console.log('📧 SMTP: Email config created:', JSON.stringify(emailConfig, null, 2));
 
   try {
-    console.log('📧 Creating nodemailer transporter...');
+    console.log('📧 SMTP: Creating nodemailer transporter...');
     const transporter = nodemailer.createTransport(emailConfig);
-    console.log('📧 Transporter created successfully');
+    console.log('📧 SMTP: Transporter created successfully');
 
     const mailOptions = {
       from: `"HellverseChat" <${process.env.EMAIL_USER}>`,
@@ -341,18 +348,18 @@ const sendVerificationEmail = async (email, code) => {
       `
     };
 
-    console.log('📧 Attempting to send email with options:', JSON.stringify({
+    console.log('📧 SMTP: Attempting to send email with options:', JSON.stringify({
       from: mailOptions.from,
       to: mailOptions.to,
       subject: mailOptions.subject
     }, null, 2));
     
     await transporter.sendMail(mailOptions);
-    console.log(`📧 Verification email sent successfully to: ${email}`);
+    console.log(`📧 SMTP: Verification email sent successfully to: ${email}`);
   } catch (error) {
-    console.error('❌ Email sending error:', error);
-    console.error('❌ Email error stack:', error.stack);
-    throw new Error('Failed to send verification email');
+    console.error('❌ SMTP: Email sending error:', error);
+    console.error('❌ SMTP: Email error stack:', error.stack);
+    throw new Error('Failed to send verification email via SMTP');
   }
 };
 
