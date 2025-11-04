@@ -1,0 +1,28 @@
+{
+  "name": "hellversechat",
+  "version": "1.0.0",
+  "description": "F-Chat Style Real-time Chat Application",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "install:all": "npm run install:backend && npm run install:frontend"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/hellversechat.git"
+  },
+  "keywords": ["chat", "realtime", "socket.io", "react", "nodejs"],
+  "author": "HellverseChat Team",
+  "license": "MIT"
+}
