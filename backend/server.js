@@ -346,6 +346,47 @@ app.get("/api/debug-env", (req, res) => {
   });
 });
 
+// Debug endpoint to test email sending
+app.get("/api/test-email", async (req, res) => {
+  try {
+    console.log('🧪 Testing email configuration...');
+    
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return res.status(400).json({
+        error: 'Email credentials not configured',
+        hasEmailUser: !!process.env.EMAIL_USER,
+        hasEmailPass: !!process.env.EMAIL_PASS
+      });
+    }
+
+    const emailConfig = getEmailConfig(process.env.EMAIL_USER);
+    const transporter = nodemailer.createTransport(emailConfig);
+    
+    // Try to verify the connection
+    await transporter.verify();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Email configuration is valid',
+      emailUser: process.env.EMAIL_USER,
+      config: {
+        host: emailConfig.host,
+        port: emailConfig.port,
+        secure: emailConfig.secure
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Email test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack,
+      emailUser: process.env.EMAIL_USER
+    });
+  }
+});
+
 // Email verification endpoints
 app.post("/api/signup-request", async (req, res) => {
   const { username, password, email } = req.body;
