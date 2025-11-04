@@ -1178,30 +1178,7 @@
   background: #c0392b;
 }
 
-/* Kink Categories */
-.kink-categories {
-  margin-top: 1rem;
-}
 
-.kink-legend {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 5px;
-  border: 1px solid rgba(52, 152, 219, 0.3);
-}
-
-.kink-legend span {
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.kink-fav { color: #e74c3c; }
-.kink-yes { color: #27ae60; }
-.kink-maybe { color: #f39c12; }
-.kink-no { color: #95a5a6; }
 
 /* Settings Groups */
 .settings-group {

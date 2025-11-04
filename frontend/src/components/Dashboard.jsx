@@ -11,6 +11,16 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingCharacter, setCreatingCharacter] = useState(false);
   const [activeCreationTab, setActiveCreationTab] = useState('basic');
+
+  // Server config - consistent with AuthPage
+  const getServerUrl = () => {
+    if (!import.meta.env.PROD) {
+      return "http://localhost:4000";
+    }
+    return import.meta.env.VITE_API_URL || "https://www.hellversechat.com";
+  };
+  
+  const serverUrl = localStorage.getItem("serverUrl") || getServerUrl();
   const [newCharacter, setNewCharacter] = useState({
     // Basic Details
     name: '',
@@ -34,13 +44,6 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
     nameColor: '#ff6b6b',
     textColor: '#ffffff',
     backgroundColor: '#2c2c54',
-    
-    // Kinks & Preferences
-    favKinks: [],
-    yesKinks: [],
-    maybeKinks: [],
-    noKinks: [],
-    customKinks: [],
     
     // Profile Info
     domSub: 'Switch',
@@ -66,7 +69,7 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
     try {
       // Fetch user's characters
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/characters', {
+      const response = await fetch(`${serverUrl}/api/characters`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -105,7 +108,7 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
     setCreatingCharacter(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/characters', {
+      const response = await fetch(`${serverUrl}/api/characters`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -486,22 +489,6 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
                     </li>
                     <li>
                       <button 
-                        className={`nav-item ${activeCreationTab === 'kinks' ? 'active' : ''}`}
-                        onClick={() => setActiveCreationTab('kinks')}
-                      >
-                        💖 Kinks
-                      </button>
-                    </li>
-                    <li>
-                      <button 
-                        className={`nav-item ${activeCreationTab === 'custom-kinks' ? 'active' : ''}`}
-                        onClick={() => setActiveCreationTab('custom-kinks')}
-                      >
-                        ✨ Custom Kinks (Limit: 500)
-                      </button>
-                    </li>
-                    <li>
-                      <button 
                         className={`nav-item ${activeCreationTab === 'settings' ? 'active' : ''}`}
                         onClick={() => setActiveCreationTab('settings')}
                       >
@@ -674,27 +661,7 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
                   </div>
                 )}
 
-                {activeCreationTab === 'kinks' && (
-                  <div className="creator-section">
-                    <h3>💖 Kinks</h3>
-                    <p>Select your character's preferences for different types of roleplay:</p>
-                    
-                    <div className="kink-categories">
-                      <div className="kink-legend">
-                        <span className="kink-fav">❤️ Favorite</span>
-                        <span className="kink-yes">💚 Yes</span>
-                        <span className="kink-maybe">💛 Maybe</span>
-                        <span className="kink-no">❌ No</span>
-                      </div>
-                      
-                      <div className="kink-list">
-                        <h4>General Preferences</h4>
-                        {/* Kink selection interface would go here */}
-                        <p>Kink selection system coming soon...</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+
 
                 {activeCreationTab === 'settings' && (
                   <div className="creator-section">
@@ -836,20 +803,7 @@ const Dashboard = ({ user, onLogout, onCharacterSelect }) => {
                   </div>
                 )}
 
-                {activeCreationTab === 'custom-kinks' && (
-                  <div className="creator-section">
-                    <h3>✨ Custom Kinks (Limit: 500)</h3>
-                    <p>Add your own custom kinks and fetishes that aren't covered in the standard list.</p>
-                    
-                    <div className="custom-kinks-editor">
-                      <textarea
-                        placeholder="Enter custom kinks, one per line..."
-                        className="creator-textarea"
-                        rows="10"
-                      />
-                    </div>
-                  </div>
-                )}
+
               </main>
             </div>
           </div>
