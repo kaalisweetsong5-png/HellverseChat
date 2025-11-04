@@ -7,6 +7,13 @@
 
 * {
   margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -17,7 +24,14 @@ body {
     sans-serif;
   background: #0f0f23;
   color: #ffffff;
-  overflow-x: hidden;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
 }
 
 img,
@@ -52,12 +66,18 @@ h6 {
 }
 
 .app {
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 /* Loading Screen */
 .loading-screen {
   height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
   background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
   display: flex;
   align-items: center;

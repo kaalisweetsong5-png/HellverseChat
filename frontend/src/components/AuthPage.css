@@ -1,13 +1,16 @@
 /* Auth Page Styles */
 .auth-page {
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
   background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem 1rem;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 /* Background Animation */
