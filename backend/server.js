@@ -191,8 +191,6 @@ const getEmailConfig = (emailUser) => {
 
 // Email sending function with nodemailer
 const sendVerificationEmail = async (email, code) => {
-  const emailConfig = getEmailConfig(process.env.EMAIL_USER);
-
   // For development/testing, log the code
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
@@ -201,6 +199,8 @@ const sendVerificationEmail = async (email, code) => {
     console.log(`📧 [DEV MODE] Just set EMAIL_USER and EMAIL_PASS - provider auto-detected!`);
     return Promise.resolve();
   }
+
+  const emailConfig = getEmailConfig(process.env.EMAIL_USER);
 
   try {
     const transporter = nodemailer.createTransport(emailConfig);
