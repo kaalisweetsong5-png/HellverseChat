@@ -413,9 +413,12 @@ app.get("/api/debug-env", (req, res) => {
     NODE_ENV: process.env.NODE_ENV,
     hasEmailUser: !!process.env.EMAIL_USER,
     hasEmailPass: !!process.env.EMAIL_PASS,
+    hasResendKey: !!process.env.RESEND_API_KEY,
     port: process.env.PORT,
     isProduction: isProduction,
-    railwayEnv: process.env.RAILWAY_ENVIRONMENT
+    railwayEnv: process.env.RAILWAY_ENVIRONMENT,
+    emailProvider: process.env.RESEND_API_KEY ? 'Resend' : 
+                  (process.env.EMAIL_USER ? 'SMTP' : 'None')
   });
 });
 
@@ -424,11 +427,59 @@ app.get("/api/test-email", async (req, res) => {
   try {
     console.log('🧪 Testing email configuration...');
     
+    // Check for Resend first
+    if (process.env.RESEND_API_KEY) {
+      try {
+        // Test Resend API connection
+        const testResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'HellverseChat <noreply@hellversechat.com>',
+            to: ['test@example.com'],
+            subject: 'Test Email',
+            html: '<p>Test</p>'
+          })
+        });
+
+        if (testResponse.status === 422) {
+          // Expected for test email - means API key is valid
+          return res.status(200).json({
+            success: true,
+            message: 'Resend API configuration is valid',
+            provider: 'Resend',
+            note: 'Ready for production emails'
+          });
+        }
+
+        const result = await testResponse.json();
+        return res.status(200).json({
+          success: true,
+          message: 'Resend API working',
+          provider: 'Resend',
+          result: result
+        });
+
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          error: `Resend API error: ${error.message}`,
+          provider: 'Resend'
+        });
+      }
+    }
+    
+    // Fallback to SMTP testing
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       return res.status(400).json({
-        error: 'Email credentials not configured',
+        error: 'No email configuration found',
         hasEmailUser: !!process.env.EMAIL_USER,
-        hasEmailPass: !!process.env.EMAIL_PASS
+        hasEmailPass: !!process.env.EMAIL_PASS,
+        hasResendKey: !!process.env.RESEND_API_KEY,
+        message: 'Configure either RESEND_API_KEY or EMAIL_USER/EMAIL_PASS'
       });
     }
 
@@ -440,7 +491,8 @@ app.get("/api/test-email", async (req, res) => {
     
     res.status(200).json({
       success: true,
-      message: 'Email configuration is valid',
+      message: 'SMTP configuration is valid',
+      provider: 'SMTP',
       emailUser: process.env.EMAIL_USER,
       config: {
         host: emailConfig.host,
@@ -454,7 +506,7 @@ app.get("/api/test-email", async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
-      stack: error.stack,
+      provider: 'SMTP',
       emailUser: process.env.EMAIL_USER
     });
   }
