@@ -1,0 +1,12 @@
+# Nixpacks configuration for Railway
+[phases.setup]
+nixPkgs = ['nodejs', 'npm']
+
+[phases.install]
+cmds = ['npm install --prefix backend']
+
+[phases.build]
+cmds = ['echo "Build completed"']
+
+[start]
+cmd = 'node backend/server.js'

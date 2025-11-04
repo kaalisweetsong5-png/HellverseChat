@@ -3,14 +3,18 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy root package.json first
-COPY package*.json ./
+# Copy backend directory first
+COPY backend/ ./backend/
 
-# Install root dependencies
+# Install backend dependencies in correct directory
+WORKDIR /app/backend
 RUN npm install --production
 
-# Copy backend directory
-COPY backend/ ./backend/
+# Go back to app root
+WORKDIR /app
+
+# Copy root package.json (for npm start command)
+COPY package*.json ./
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
