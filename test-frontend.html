@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HellverseChat Backend Test</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        input, button { margin: 5px; padding: 8px; }
+        #results { background: #f5f5f5; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🧪 HellverseChat Backend Test</h1>
+    <p>Testing server: <strong id="server-url">http://localhost:4000</strong></p>
+
+    <div class="test-section">
+        <h3>1. Health Check</h3>
+        <button onclick="testHealth()">Test Health Endpoint</button>
+    </div>
+
+    <div class="test-section">
+        <h3>2. User Authentication</h3>
+        <div>
+            <input type="text" id="username" placeholder="Username" value="testuser">
+            <input type="password" id="password" placeholder="Password" value="test123">
+            <input type="text" id="display" placeholder="Display Name" value="Test User">
+        </div>
+        <button onclick="testSignup()">Test Signup</button>
+        <button onclick="testLogin()">Test Login</button>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Socket.IO Real-time Test</h3>
+        <button onclick="testSocket()">Connect Socket.IO</button>
+        <button onclick="sendMessage()">Send Test Message</button>
+        <div>Socket Status: <span id="socket-status">Disconnected</span></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📋 Test Results</h3>
+        <div id="results">Click buttons above to test the backend...</div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:4000';
+        let currentToken = null;
+        let socket = null;
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'success' ? 'green' : type === 'error' ? 'red' : 'black';
+            results.innerHTML += `[${timestamp}] <span style="color: ${color}">${message}</span>\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function testHealth() {
+            try {
+                log('Testing health endpoint...');
+                const response = await fetch(`${BASE_URL}/health`);
+                const data = await response.json();
+                log(`✅ Health check passed: ${JSON.stringify(data)}`, 'success');
+            } catch (error) {
+                log(`❌ Health check failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testSignup() {
+            try {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const display = document.getElementById('display').value;
+
+                log(`Testing signup for user: ${username}...`);
+                const response = await fetch(`${BASE_URL}/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, display })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    currentToken = data.token;
+                    log(`✅ Signup successful! Token: ${data.token.substring(0, 20)}...`, 'success');
+                } else {
+                    log(`❌ Signup failed: ${data}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Signup error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+
+                log(`Testing login for user: ${username}...`);
+                const response = await fetch(`${BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    currentToken = data.token;
+                    log(`✅ Login successful! Welcome ${data.display}`, 'success');
+                } else {
+                    log(`❌ Login failed: ${data}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Login error: ${error.message}`, 'error');
+            }
+        }
+
+        function testSocket() {
+            try {
+                log('Connecting to Socket.IO...');
+                socket = io(BASE_URL);
+                
+                socket.on('connect', () => {
+                    document.getElementById('socket-status').textContent = 'Connected ✅';
+                    log('✅ Socket.IO connected successfully!', 'success');
+                });
+
+                socket.on('disconnect', () => {
+                    document.getElementById('socket-status').textContent = 'Disconnected ❌';
+                    log('❌ Socket.IO disconnected', 'error');
+                });
+
+                socket.on('message', (data) => {
+                    log(`📨 Message received: ${JSON.stringify(data)}`, 'success');
+                });
+
+                socket.on('presence', (data) => {
+                    log(`👤 Presence update: ${JSON.stringify(data)}`, 'success');
+                });
+
+                // Authenticate if we have a token
+                if (currentToken) {
+                    socket.emit('auth', { token: currentToken });
+                    log('🔐 Authentication sent to server');
+                }
+            } catch (error) {
+                log(`❌ Socket.IO error: ${error.message}`, 'error');
+            }
+        }
+
+        function sendMessage() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected. Connect first!', 'error');
+                return;
+            }
+
+            const message = {
+                text: 'Hello from test page! 👋',
+                room: 'general'
+            };
+
+            socket.emit('message', message);
+            log(`📤 Sent message: ${message.text}`);
+        }
+
+        // Auto-test health on load
+        window.onload = () => {
+            log('🚀 HellverseChat Backend Test Page Loaded');
+            testHealth();
+        };
+    </script>
+</body>
+</html>
