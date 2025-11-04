@@ -52,7 +52,8 @@ const __dirname = path.dirname(__filename);
 const users = new Map();
 const socketsByUser = new Map();
 const bannedUsers = new Set();
-const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
+const channels = new Set([]);
+const newsArticles = new Map(); // In-memory news storage (use database in production)
 
 // Admin configuration - add your username here
 const ADMIN_USERS = new Set([
@@ -296,6 +297,101 @@ app.delete("/admin/channel/:name", (req, res) => {
 
 app.get("/channels", (req, res) => {
   res.json({ channels: Array.from(channels) });
+});
+
+// News endpoints
+app.get("/api/news", (req, res) => {
+  const news = Array.from(newsArticles.values())
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(news);
+});
+
+app.post("/api/news", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { title, content } = req.body;
+    if (!title || !content) return res.status(400).send("title and content required");
+    
+    const newsId = Date.now().toString();
+    const article = {
+      id: newsId,
+      title,
+      content,
+      author: adminUser.display || payload.username,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    newsArticles.set(newsId, article);
+    
+    // Broadcast new news to all connected users
+    io.emit("news_update", { type: "created", article });
+    
+    res.json(article);
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.put("/api/news/:id", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { id } = req.params;
+    const { title, content } = req.body;
+    const article = newsArticles.get(id);
+    
+    if (!article) return res.status(404).send("news article not found");
+    
+    if (title) article.title = title;
+    if (content) article.content = content;
+    article.updatedAt = new Date().toISOString();
+    
+    newsArticles.set(id, article);
+    
+    // Broadcast news update to all connected users
+    io.emit("news_update", { type: "updated", article });
+    
+    res.json(article);
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.delete("/api/news/:id", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const adminUser = users.get(payload.username);
+    if (!adminUser?.isAdmin) return res.status(403).send("admin required");
+    
+    const { id } = req.params;
+    const article = newsArticles.get(id);
+    
+    if (!article) return res.status(404).send("news article not found");
+    
+    newsArticles.delete(id);
+    
+    // Broadcast news deletion to all connected users
+    io.emit("news_update", { type: "deleted", articleId: id });
+    
+    res.json({ success: true, message: "News article deleted" });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
 });
 
 // Catch-all handler for production: serve React app for any non-API routes

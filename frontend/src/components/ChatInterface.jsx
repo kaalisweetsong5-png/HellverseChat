@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChromePicker } from 'react-color';
 import io from "socket.io-client";
+import AdminPanel from './AdminPanel';
 import "./ChatInterface.css";
 
 function ChatInterface({ user, onLogout }) {
@@ -301,73 +302,7 @@ function ChatInterface({ user, onLogout }) {
     }));
   };
 
-  // Admin Panel Component
-  const AdminPanel = ({ onClose }) => (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content admin-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>👑 Admin Panel</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        
-        <div className="admin-sections">
-          <div className="admin-section">
-            <h4>Channel Management</h4>
-            <div className="admin-form">
-              <input
-                type="text"
-                placeholder="New channel name..."
-                value={adminChannelName}
-                onChange={(e) => setAdminChannelName(e.target.value)}
-                className="admin-input"
-                onKeyDown={(e) => e.key === "Enter" && createAdminChannel()}
-              />
-              <button onClick={createAdminChannel} className="admin-btn create">
-                Create Channel
-              </button>
-            </div>
-            
-            <div className="channel-list">
-              <h5>Current Channels:</h5>
-              {rooms.map(room => (
-                <div key={room} className="channel-item">
-                  <span>#{room}</span>
-                  {room !== "main" && (
-                    <button 
-                      onClick={() => deleteChannel(room)}
-                      className="admin-btn delete-small"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="admin-section">
-            <h4>User Moderation</h4>
-            <div className="admin-form">
-              <input
-                type="text"
-                placeholder="Username to ban..."
-                value={banTarget}
-                onChange={(e) => setBanTarget(e.target.value)}
-                className="admin-input"
-                onKeyDown={(e) => e.key === "Enter" && banUser(banTarget)}
-              />
-              <button 
-                onClick={() => banUser(banTarget)} 
-                className="admin-btn ban"
-              >
-                Ban User
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+
 
   // Enhanced Profile Modal Component  
   const ProfileModal = ({ profile, onClose, isOwnProfile = false }) => (
@@ -819,7 +754,7 @@ function ChatInterface({ user, onLogout }) {
       )}
       
       {showAdminPanel && user?.isAdmin && (
-        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+        <AdminPanel user={user} onClose={() => setShowAdminPanel(false)} />
       )}
       
       {showBanDialog && (
