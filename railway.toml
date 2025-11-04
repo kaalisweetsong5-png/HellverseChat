@@ -9,4 +9,4 @@
 
 [variables]
   NODE_ENV = "production"
-  JWT_SECRET = "your-super-secret-jwt-key-change-me-in-production"
+  JWT_SECRET = "railway-secret-key-change-in-dashboard"
