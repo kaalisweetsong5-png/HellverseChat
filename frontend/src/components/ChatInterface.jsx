@@ -4,7 +4,7 @@ import io from "socket.io-client";
 import AdminPanel from './AdminPanel';
 import "./ChatInterface.css";
 
-function ChatInterface({ user, onLogout }) {
+function ChatInterface({ user, character, onLogout }) {
   const [socket, setSocket] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
@@ -17,20 +17,9 @@ function ChatInterface({ user, onLogout }) {
     (import.meta.env.PROD ? "https://www.hellversechat.com" : "http://localhost:4000");
   const [serverUrl] = useState(localStorage.getItem("serverUrl") || defaultServerUrl);
   
-  // Enhanced character profile states
-  const [character, setCharacter] = useState({
-    name: "",
-    avatar: "",
-    species: "Human",
-    gender: "Unspecified", 
-    age: "Adult",
-    description: "",
-    preferences: "",
-    status: "Looking for RP",
-    nameColor: "#ff6b6b",
-    textColor: "#ffffff",
-    backgroundColor: "#2c2c54",
-    ...user.character
+  // Character customization states (for editing current character)
+  const [editingCharacter, setEditingCharacter] = useState({
+    ...character
   });
   
   const [showColorPickers, setShowColorPickers] = useState({
@@ -63,7 +52,10 @@ function ChatInterface({ user, onLogout }) {
 
   const connectSocket = (token) => {
     const newSocket = io(serverUrl, {
-      auth: { token }
+      auth: { 
+        token,
+        characterId: character.id 
+      }
     });
 
     newSocket.on("connect", () => {
@@ -74,13 +66,17 @@ function ChatInterface({ user, onLogout }) {
       setMessages(prev => [...prev, msg]);
     });
 
-    newSocket.on("presence", ({ user: username, status, character: userChar, isAdmin }) => {
+    newSocket.on("presence", ({ characterId, character: userChar, username, status, isAdmin }) => {
       setOnlineUsers(prev => {
         const newMap = new Map(prev);
         if (status === "online") {
-          newMap.set(username, { character: userChar || null, isAdmin: isAdmin || false });
+          newMap.set(characterId, { 
+            character: userChar, 
+            username: username,
+            isAdmin: isAdmin || false 
+          });
         } else {
-          newMap.delete(username);
+          newMap.delete(characterId);
         }
         return newMap;
       });
@@ -136,13 +132,14 @@ function ChatInterface({ user, onLogout }) {
       onLogout();
     });
 
-    newSocket.on("typing", ({ user: typingUser, typing }) => {
+    newSocket.on("typing", ({ characterId, character: typingChar, typing }) => {
       setTypingUsers(prev => {
         const newSet = new Set(prev);
+        const displayName = typingChar?.name || 'Unknown';
         if (typing) {
-          newSet.add(typingUser);
+          newSet.add(displayName);
         } else {
-          newSet.delete(typingUser);
+          newSet.delete(displayName);
         }
         return newSet;
       });

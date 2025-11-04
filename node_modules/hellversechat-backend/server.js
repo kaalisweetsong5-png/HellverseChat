@@ -49,10 +49,11 @@ const CORS_ORIGIN = isProduction
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const users = new Map();
-const socketsByUser = new Map();
+const users = new Map(); // username -> { passwordHash, email, isAdmin, characters: Map(characterId -> character) }
+const characters = new Map(); // characterId -> { id, name, ownerId, ... }
+const socketsByCharacter = new Map(); // characterId -> socketId
 const bannedUsers = new Set();
-const channels = new Set([]);
+const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
 const newsArticles = new Map(); // In-memory news storage (use database in production)
 
 // Admin configuration - add your username here
@@ -117,7 +118,7 @@ app.get("/health", (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-  const { username, password, display, character } = req.body;
+  const { username, password, email } = req.body;
   if (!username || !password) return res.status(400).send("missing");
   if (users.has(username)) return res.status(409).send("user exists");
   if (isBanned(username)) return res.status(403).send("banned");
@@ -125,18 +126,10 @@ app.post("/signup", async (req, res) => {
   const hash = await bcrypt.hash(password, 10);
   const userData = { 
     passwordHash: hash, 
-    display: display || username,
+    email: email || '',
     isAdmin: isAdmin(username),
-    character: character || {
-      name: display || username,
-      avatar: '',
-      species: 'Human',
-      gender: 'Unspecified',
-      age: 'Adult',
-      description: '',
-      preferences: '',
-      status: 'Looking for RP'
-    }
+    characters: new Map(), // Store character IDs -> character data
+    createdAt: new Date().toISOString()
   };
   users.set(username, userData);
   
@@ -144,9 +137,9 @@ app.post("/signup", async (req, res) => {
   res.json({ 
     token, 
     username, 
-    display: userData.display, 
-    character: userData.character,
-    isAdmin: userData.isAdmin 
+    email: userData.email,
+    isAdmin: userData.isAdmin,
+    characterCount: 0
   });
 });
 
@@ -166,21 +159,15 @@ app.post("/login", async (req, res) => {
   res.json({ 
     token, 
     username, 
-    display: u.display, 
-    character: u.character,
-    isAdmin: u.isAdmin 
+    email: u.email,
+    isAdmin: u.isAdmin,
+    characterCount: u.characters.size,
+    characters: Array.from(u.characters.values())
   });
 });
 
-// Character profile endpoints
-app.get("/profile/:username", (req, res) => {
-  const { username } = req.params;
-  const user = users.get(username);
-  if (!user) return res.status(404).send("user not found");
-  res.json({ username, display: user.display, character: user.character });
-});
-
-app.put("/profile", (req, res) => {
+// Character management endpoints
+app.get("/api/characters", (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).send("auth required");
   
@@ -189,19 +176,138 @@ app.put("/profile", (req, res) => {
     const user = users.get(payload.username);
     if (!user) return res.status(404).send("user not found");
     
-    const { display, character } = req.body;
-    if (display) user.display = display;
-    if (character) user.character = { ...user.character, ...character };
-    
     res.json({ 
-      username: payload.username, 
-      display: user.display, 
-      character: user.character,
-      isAdmin: user.isAdmin 
+      characters: Array.from(user.characters.values()),
+      characterCount: user.characters.size,
+      maxCharacters: 150
     });
   } catch (e) {
     return res.status(401).send("invalid token");
   }
+});
+
+app.post("/api/characters", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const user = users.get(payload.username);
+    if (!user) return res.status(404).send("user not found");
+    
+    if (user.characters.size >= 150) {
+      return res.status(400).send("character limit reached");
+    }
+    
+    const { name, species, gender, age, description, preferences, status, nameColor, textColor, backgroundColor } = req.body;
+    if (!name?.trim()) return res.status(400).send("character name required");
+    
+    const characterId = `${payload.username}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const character = {
+      id: characterId,
+      name: name.trim(),
+      ownerId: payload.username,
+      species: species || 'Human',
+      gender: gender || 'Unspecified',
+      age: age || 'Adult',
+      description: description || '',
+      preferences: preferences || '',
+      status: status || 'Looking for RP',
+      nameColor: nameColor || '#ff6b6b',
+      textColor: textColor || '#ffffff',
+      backgroundColor: backgroundColor || '#2c2c54',
+      avatar: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    user.characters.set(characterId, character);
+    characters.set(characterId, character);
+    
+    res.json(character);
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.put("/api/characters/:id", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const user = users.get(payload.username);
+    if (!user) return res.status(404).send("user not found");
+    
+    const { id } = req.params;
+    const character = user.characters.get(id);
+    if (!character) return res.status(404).send("character not found");
+    
+    const { name, species, gender, age, description, preferences, status, nameColor, textColor, backgroundColor } = req.body;
+    
+    if (name !== undefined) character.name = name.trim() || character.name;
+    if (species !== undefined) character.species = species;
+    if (gender !== undefined) character.gender = gender;
+    if (age !== undefined) character.age = age;
+    if (description !== undefined) character.description = description;
+    if (preferences !== undefined) character.preferences = preferences;
+    if (status !== undefined) character.status = status;
+    if (nameColor !== undefined) character.nameColor = nameColor;
+    if (textColor !== undefined) character.textColor = textColor;
+    if (backgroundColor !== undefined) character.backgroundColor = backgroundColor;
+    
+    character.updatedAt = new Date().toISOString();
+    
+    user.characters.set(id, character);
+    characters.set(id, character);
+    
+    res.json(character);
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.delete("/api/characters/:id", (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).send("auth required");
+  
+  try {
+    const payload = jwt.verify(token, SECRET);
+    const user = users.get(payload.username);
+    if (!user) return res.status(404).send("user not found");
+    
+    const { id } = req.params;
+    const character = user.characters.get(id);
+    if (!character) return res.status(404).send("character not found");
+    
+    user.characters.delete(id);
+    characters.delete(id);
+    
+    res.json({ success: true, message: "Character deleted" });
+  } catch (e) {
+    return res.status(401).send("invalid token");
+  }
+});
+
+app.get("/api/characters/:id", (req, res) => {
+  const { id } = req.params;
+  const character = characters.get(id);
+  if (!character) return res.status(404).send("character not found");
+  
+  // Return public character info (no private data)
+  res.json({
+    id: character.id,
+    name: character.name,
+    species: character.species,
+    gender: character.gender,
+    age: character.age,
+    description: character.description,
+    status: character.status,
+    nameColor: character.nameColor,
+    textColor: character.textColor,
+    backgroundColor: character.backgroundColor,
+    avatar: character.avatar
+  });
 });
 
 // Admin endpoints
@@ -412,10 +518,21 @@ const io = new SocketIOServer(server, {
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
+  const characterId = socket.handshake.auth?.characterId;
   if (!token) return next(new Error("auth required"));
+  if (!characterId) return next(new Error("character selection required"));
+  
   try {
     const payload = jwt.verify(token, SECRET);
+    const character = characters.get(characterId);
+    
+    if (!character || character.ownerId !== payload.username) {
+      return next(new Error("invalid character"));
+    }
+    
     socket.data.username = payload.username;
+    socket.data.characterId = characterId;
+    socket.data.character = character;
     return next();
   } catch (e) {
     return next(new Error("invalid token"));
@@ -423,21 +540,24 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  const user = socket.data.username;
-  const userData = users.get(user);
+  const username = socket.data.username;
+  const characterId = socket.data.characterId;
+  const character = socket.data.character;
+  const userData = users.get(username);
   
-  if (isBanned(user)) {
+  if (isBanned(username)) {
     socket.emit("banned", { reason: "You are banned from this server" });
     socket.disconnect(true);
     return;
   }
   
-  socketsByUser.set(user, socket.id);
+  socketsByCharacter.set(characterId, socket.id);
 
   io.emit("presence", { 
-    user, 
-    status: "online", 
-    character: userData?.character,
+    characterId,
+    character: character,
+    username: username,
+    status: "online",
     isAdmin: userData?.isAdmin || false 
   });
 
@@ -447,8 +567,7 @@ io.on("connection", (socket) => {
   socket.emit("channels_list", { channels: Array.from(channels) });
 
   socket.on("message", (payload) => {
-    const userProfile = users.get(user);
-    if (isBanned(user)) {
+    if (isBanned(username)) {
       socket.emit("banned", { reason: "You are banned from this server" });
       socket.disconnect(true);
       return;
@@ -456,10 +575,10 @@ io.on("connection", (socket) => {
     
     const msg = {
       id: Date.now(),
-      user,
-      display: userProfile?.display || user,
-      character: userProfile?.character || null,
-      isAdmin: userProfile?.isAdmin || false,
+      characterId: characterId,
+      character: character,
+      username: username,
+      isAdmin: userData?.isAdmin || false,
       text: payload.text,
       messageType: payload.messageType || 'normal', // normal, emote, ooc
       ts: new Date().toISOString(),
@@ -469,33 +588,36 @@ io.on("connection", (socket) => {
 
   // Admin actions via socket
   socket.on("admin_ban", (payload) => {
-    const adminUser = users.get(user);
-    if (!adminUser?.isAdmin) return;
+    if (!userData?.isAdmin) return;
     
     const { targetUser } = payload;
     if (isAdmin(targetUser)) return; // Cannot ban other admins
     
     bannedUsers.add(targetUser);
     
-    // Disconnect banned user
-    const targetSocketId = socketsByUser.get(targetUser);
-    if (targetSocketId) {
-      const targetSocket = io.sockets.sockets.get(targetSocketId);
-      if (targetSocket) {
-        targetSocket.emit("banned", { reason: `You have been banned by ${adminUser.character?.name || user}` });
-        targetSocket.disconnect(true);
+    // Disconnect all characters of banned user
+    const targetUserData = users.get(targetUser);
+    if (targetUserData) {
+      for (const [charId, char] of targetUserData.characters) {
+        const targetSocketId = socketsByCharacter.get(charId);
+        if (targetSocketId) {
+          const targetSocket = io.sockets.sockets.get(targetSocketId);
+          if (targetSocket) {
+            targetSocket.emit("banned", { reason: `You have been banned by ${character.name}` });
+            targetSocket.disconnect(true);
+          }
+        }
       }
     }
     
     io.emit("user_banned", { 
       username: targetUser, 
-      bannedBy: adminUser.character?.name || user 
+      bannedBy: character.name 
     });
   });
 
   socket.on("admin_create_channel", (payload) => {
-    const adminUser = users.get(user);
-    if (!adminUser?.isAdmin) return;
+    if (!userData?.isAdmin) return;
     
     const { name } = payload;
     if (!name) return;
@@ -504,13 +626,12 @@ io.on("connection", (socket) => {
     channels.add(channelName);
     io.emit("channel_created", { 
       name: channelName, 
-      creator: adminUser.character?.name || user 
+      creator: character.name 
     });
   });
 
   socket.on("admin_delete_channel", (payload) => {
-    const adminUser = users.get(user);
-    if (!adminUser?.isAdmin) return;
+    if (!userData?.isAdmin) return;
     
     const { name } = payload;
     if (!name || name === "main") return; // Cannot delete main channel
@@ -518,12 +639,16 @@ io.on("connection", (socket) => {
     channels.delete(name);
     io.emit("channel_deleted", { 
       name, 
-      deleter: adminUser.character?.name || user 
+      deleter: character.name 
     });
   });
 
   socket.on("typing", ({ room, typing }) => {
-    socket.to(room || "main").emit("typing", { user, typing });
+    socket.to(room || "main").emit("typing", { 
+      characterId,
+      character,
+      typing 
+    });
   });
 
   socket.on("join_room", ({ room }) => {
@@ -536,16 +661,16 @@ io.on("connection", (socket) => {
     
     // Join the new room
     socket.join(room);
-    console.log(`${user} joined room: ${room}`);
+    console.log(`${character.name} (${username}) joined room: ${room}`);
   });
 
   socket.on("disconnect", () => {
-    socketsByUser.delete(user);
-    const userData = users.get(user);
+    socketsByCharacter.delete(characterId);
     io.emit("presence", { 
-      user, 
+      characterId,
+      character,
+      username,
       status: "offline",
-      character: userData?.character,
       isAdmin: userData?.isAdmin || false 
     });
   });

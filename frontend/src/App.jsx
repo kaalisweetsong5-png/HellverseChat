@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import LandingPage from "./components/LandingPage";
 import AuthPage from "./components/AuthPage";
+import CharacterSelection from "./components/CharacterSelection";
 import ChatInterface from "./components/ChatInterface";
 import "./App.css";
 
@@ -9,6 +10,7 @@ function App() {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Ensure we're on the correct domain in production
@@ -24,10 +26,12 @@ function App() {
     // Check for existing authentication
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
+    const storedCharacter = localStorage.getItem("selectedCharacter");
     
     console.log('🔐 Auth Check:', {
       hasToken: !!token,
       hasStoredUser: !!storedUser,
+      hasStoredCharacter: !!storedCharacter,
       tokenLength: token?.length,
       storedUserPreview: storedUser?.substring(0, 50) + '...'
     });
@@ -38,11 +42,25 @@ function App() {
         console.log('✅ Parsed user data:', userData);
         setUser(userData);
         setIsAuthenticated(true);
+        
+        // Restore selected character if available
+        if (storedCharacter) {
+          try {
+            const characterData = JSON.parse(storedCharacter);
+            setSelectedCharacter(characterData);
+            console.log('👤 Restored character:', characterData.name);
+          } catch (charError) {
+            console.error("❌ Error parsing stored character:", charError);
+            localStorage.removeItem("selectedCharacter");
+          }
+        }
+        
         console.log('🎯 Setting authenticated to true');
       } catch (error) {
         console.error("❌ Error parsing stored user data:", error);
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+        localStorage.removeItem("selectedCharacter");
       }
     } else {
       console.log('❌ No valid auth data found');
@@ -54,9 +72,17 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("selectedCharacter");
     setIsAuthenticated(false);
     setUser(null);
+    setSelectedCharacter(null);
     navigate("/");
+  };
+
+  const handleCharacterSelect = (character) => {
+    setSelectedCharacter(character);
+    localStorage.setItem("selectedCharacter", JSON.stringify(character));
+    navigate("/chat");
   };
 
   if (isLoading) {
@@ -86,8 +112,8 @@ function App() {
           element={
             isAuthenticated ? (
               <>
-                {console.log('🔄 Redirecting to /chat from /')}
-                <Navigate to="/chat" replace />
+                {console.log('🔄 Redirecting to /characters from /')}
+                <Navigate to="/characters" replace />
               </>
             ) : (
               <>
@@ -102,13 +128,35 @@ function App() {
         <Route 
           path="/login" 
           element={
-            isAuthenticated ? <Navigate to="/chat" replace /> : <AuthPage />
+            isAuthenticated ? <Navigate to="/characters" replace /> : <AuthPage />
           } 
         />
         <Route 
           path="/signup" 
           element={
-            isAuthenticated ? <Navigate to="/chat" replace /> : <AuthPage />
+            isAuthenticated ? <Navigate to="/characters" replace /> : <AuthPage />
+          } 
+        />
+        
+        {/* Character Selection */}
+        <Route 
+          path="/characters" 
+          element={
+            isAuthenticated ? (
+              <>
+                {console.log('👥 Loading character selection for:', user?.username)}
+                <CharacterSelection 
+                  user={user}
+                  onCharacterSelect={handleCharacterSelect}
+                  onLogout={handleLogout}
+                />
+              </>
+            ) : (
+              <>
+                {console.log('🚫 Not authenticated, redirecting to home from /characters')}
+                <Navigate to="/" replace />
+              </>
+            )
           } 
         />
         
@@ -116,13 +164,19 @@ function App() {
         <Route 
           path="/chat" 
           element={
-            isAuthenticated ? (
+            isAuthenticated && selectedCharacter ? (
               <>
-                {console.log('💬 Loading chat interface for:', user?.username)}
+                {console.log('💬 Loading chat interface for character:', selectedCharacter?.name)}
                 <ChatInterface 
                   user={user}
+                  character={selectedCharacter}
                   onLogout={handleLogout}
                 />
+              </>
+            ) : isAuthenticated ? (
+              <>
+                {console.log('🎭 No character selected, redirecting to characters')}
+                <Navigate to="/characters" replace />
               </>
             ) : (
               <>
