@@ -191,6 +191,13 @@ const getEmailConfig = (emailUser) => {
 
 // Email sending function with nodemailer
 const sendVerificationEmail = async (email, code) => {
+  console.log('📧 sendVerificationEmail called with:', { 
+    email, 
+    code, 
+    hasEmailUser: !!process.env.EMAIL_USER, 
+    hasEmailPass: !!process.env.EMAIL_PASS 
+  });
+
   // For development/testing, log the code
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
@@ -200,6 +207,7 @@ const sendVerificationEmail = async (email, code) => {
     return Promise.resolve();
   }
 
+  console.log('📧 Email credentials found, getting config...');
   const emailConfig = getEmailConfig(process.env.EMAIL_USER);
 
   try {
@@ -324,12 +332,16 @@ app.post("/api/signup-request", async (req, res) => {
   }
   
   try {
+    console.log('📝 Starting signup process for:', { username, email });
+    
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
+    console.log('🔐 Password hashed successfully');
     
     // Generate verification code
     const code = generateVerificationCode();
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
+    console.log('🎲 Verification code generated:', code);
     
     // Store pending verification
     pendingVerifications.set(email, {
@@ -340,13 +352,17 @@ app.post("/api/signup-request", async (req, res) => {
       expiresAt,
       createdAt: new Date().toISOString()
     });
+    console.log('💾 Pending verification stored');
     
     // Send verification email
+    console.log('📧 Attempting to send verification email...');
     await sendVerificationEmail(email, code);
+    console.log('📧 Verification email sent successfully');
     
     res.status(200).send("Verification code sent");
   } catch (error) {
-    console.error('Signup request error:', error);
+    console.error('❌ Signup request error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).send("Failed to send verification code");
   }
 });

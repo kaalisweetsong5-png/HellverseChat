@@ -18,7 +18,16 @@
     "type": "git",
     "url": "https://github.com/kaalisweetsong5-png/HellverseChat.git"
   },
-  "keywords": ["chat", "realtime", "socket.io", "react", "nodejs"],
+  "keywords": [
+    "chat",
+    "realtime",
+    "socket.io",
+    "react",
+    "nodejs"
+  ],
   "author": "HellverseChat Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
 }
