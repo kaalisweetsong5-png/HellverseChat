@@ -127,6 +127,11 @@ const saveData = () => {
     
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
     console.log(`💾 Saved ${users.size} users and ${characters.size} characters to ${DATA_FILE}`);
+    
+    // In Railway/production, also log users for debugging
+    if (process.env.RAILWAY_ENVIRONMENT) {
+      console.log('🔍 Current users in memory:', Array.from(users.keys()));
+    }
   } catch (error) {
     console.error('❌ Error saving data:', error);
   }
@@ -134,6 +139,37 @@ const saveData = () => {
 
 // Load data on startup
 loadData();
+
+// Create default admin user if no users exist (for ephemeral filesystems like Railway)
+const createDefaultUsers = async () => {
+  if (users.size === 0) {
+    console.log('🔧 No users found, creating default admin user...');
+    
+    try {
+      const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+      const hash = await bcrypt.hash(defaultPassword, 10);
+      
+      const adminUser = {
+        passwordHash: hash,
+        email: 'admin@hellversechat.com',
+        isAdmin: true,
+        characters: new Map(),
+        createdAt: new Date().toISOString()
+      };
+      
+      users.set('HellverseAdmin', adminUser);
+      console.log('✅ Created default admin user: HellverseAdmin');
+      console.log('🔑 Default password:', defaultPassword);
+      
+      saveData(); // Attempt to save (will work locally, ignored in Railway)
+    } catch (error) {
+      console.error('❌ Failed to create default admin user:', error);
+    }
+  }
+};
+
+// Create default users after loading
+createDefaultUsers();
 const bannedUsers = new Set();
 const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
 const newsArticles = new Map(); // In-memory news storage (use database in production)
@@ -804,8 +840,13 @@ app.get("/api/characters", (req, res) => {
   
   try {
     const payload = jwt.verify(token, SECRET);
+    console.log('🔍 Looking for user:', payload.username);
+    console.log('🔍 Available users:', Array.from(users.keys()));
     const user = users.get(payload.username);
-    if (!user) return res.status(404).send("user not found");
+    if (!user) {
+      console.log('❌ User not found:', payload.username);
+      return res.status(404).send("user not found");
+    }
     
     res.json({ 
       characters: Array.from(user.characters.values()),
