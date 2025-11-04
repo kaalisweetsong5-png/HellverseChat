@@ -50,9 +50,90 @@ const CORS_ORIGIN = isProduction
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Data persistence
+const DATA_FILE = './data.json';
+
+// Initialize data structures
 const users = new Map(); // username -> { passwordHash, email, isAdmin, characters: Map(characterId -> character) }
 const characters = new Map(); // characterId -> { id, name, ownerId, ... }
 const socketsByCharacter = new Map(); // characterId -> socketId
+
+// Load data from file
+const loadData = () => {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      
+      // Load users
+      if (data.users) {
+        Object.entries(data.users).forEach(([username, userData]) => {
+          // Convert characters object back to Map
+          const charactersMap = new Map();
+          if (userData.characters) {
+            Object.entries(userData.characters).forEach(([charId, charData]) => {
+              charactersMap.set(charId, charData);
+            });
+          }
+          
+          users.set(username, {
+            ...userData,
+            characters: charactersMap
+          });
+        });
+      }
+      
+      // Load characters
+      if (data.characters) {
+        Object.entries(data.characters).forEach(([charId, charData]) => {
+          characters.set(charId, charData);
+        });
+      }
+      
+      console.log(`📁 Loaded ${users.size} users and ${characters.size} characters from ${DATA_FILE}`);
+    } else {
+      console.log('📁 No data file found, starting with empty data');
+    }
+  } catch (error) {
+    console.error('❌ Error loading data:', error);
+  }
+};
+
+// Save data to file
+const saveData = () => {
+  try {
+    const data = {
+      users: {},
+      characters: {}
+    };
+    
+    // Convert users Map to object
+    users.forEach((userData, username) => {
+      // Convert characters Map to object
+      const charactersObj = {};
+      userData.characters.forEach((charData, charId) => {
+        charactersObj[charId] = charData;
+      });
+      
+      data.users[username] = {
+        ...userData,
+        characters: charactersObj
+      };
+    });
+    
+    // Convert characters Map to object
+    characters.forEach((charData, charId) => {
+      data.characters[charId] = charData;
+    });
+    
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    console.log(`💾 Saved ${users.size} users and ${characters.size} characters to ${DATA_FILE}`);
+  } catch (error) {
+    console.error('❌ Error saving data:', error);
+  }
+};
+
+// Load data on startup
+loadData();
 const bannedUsers = new Set();
 const channels = new Set(["main", "general", "adult", "fantasy", "sci-fi"]);
 const newsArticles = new Map(); // In-memory news storage (use database in production)
@@ -611,6 +692,7 @@ app.post("/api/verify-account", async (req, res) => {
     };
     
     users.set(pending.username, userData);
+    saveData(); // Persist user data
     
     // Remove pending verification
     pendingVerifications.delete(email);
@@ -680,6 +762,7 @@ app.post("/signup", async (req, res) => {
     createdAt: new Date().toISOString()
   };
   users.set(username, userData);
+  saveData(); // Persist user data
   
   const token = jwt.sign({ username }, SECRET);
   res.json({ 
@@ -771,6 +854,7 @@ app.post("/api/characters", (req, res) => {
     
     user.characters.set(characterId, character);
     characters.set(characterId, character);
+    saveData(); // Persist character data
     
     res.json(character);
   } catch (e) {
@@ -808,6 +892,7 @@ app.put("/api/characters/:id", (req, res) => {
     
     user.characters.set(id, character);
     characters.set(id, character);
+    saveData(); // Persist character data
     
     res.json(character);
   } catch (e) {
@@ -830,6 +915,7 @@ app.delete("/api/characters/:id", (req, res) => {
     
     user.characters.delete(id);
     characters.delete(id);
+    saveData(); // Persist character data
     
     res.json({ success: true, message: "Character deleted" });
   } catch (e) {
@@ -1237,6 +1323,24 @@ if (fs.existsSync(path.join(__dirname, '../frontend/dist'))) {
     }
   });
 }
+
+// Periodic save every 5 minutes
+setInterval(() => {
+  saveData();
+}, 5 * 60 * 1000);
+
+// Save data on process exit
+process.on('SIGINT', () => {
+  console.log('\n💾 Saving data before exit...');
+  saveData();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n💾 Saving data before termination...');
+  saveData();
+  process.exit(0);
+});
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, '0.0.0.0', () => {
