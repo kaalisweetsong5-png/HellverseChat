@@ -8,17 +8,35 @@ function AuthPage() {
   const location = useLocation();
   const isSignup = location.pathname === '/signup';
   
-  // Server config - use relative URLs in production, localhost in development
-  const defaultServerUrl = import.meta.env.VITE_API_URL || 
-    (import.meta.env.PROD ? "" : "http://localhost:4000");
+  // Server config - ensure we use the correct domain
+  const getDefaultServerUrl = () => {
+    if (!import.meta.env.PROD) {
+      return "http://localhost:4000";
+    }
+    
+    // In production, always use relative URLs but ensure we're on the right domain
+    const currentHost = window.location.host;
+    if (currentHost === 'hellversechat.com') {
+      // Redirect to www version since that's where Railway points
+      const newUrl = window.location.href.replace('hellversechat.com', 'www.hellversechat.com');
+      window.location.replace(newUrl);
+      return "";
+    }
+    
+    return import.meta.env.VITE_API_URL || "";
+  };
+  
+  const defaultServerUrl = getDefaultServerUrl();
   const [serverUrl, setServerUrl] = useState(localStorage.getItem("serverUrl") || defaultServerUrl);
   
   // Debug logging
   console.log('🔧 Environment:', {
     VITE_API_URL: import.meta.env.VITE_API_URL,
     PROD: import.meta.env.PROD,
+    currentHost: window.location.host,
     defaultServerUrl,
-    serverUrl
+    serverUrl,
+    fullUrl: `${serverUrl}/signup`
   });
   const [showServerConfig, setShowServerConfig] = useState(false);
   
