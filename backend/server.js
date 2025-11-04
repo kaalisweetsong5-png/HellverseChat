@@ -205,21 +205,94 @@ const getEmailConfig = (emailUser) => {
   }
 };
 
+// Service-based email functions
+const sendWithResend = async (email, code) => {
+  try {
+    console.log('📧 Sending email via Resend API...');
+    
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'HellverseChat <noreply@hellversechat.com>',
+        to: [email],
+        subject: 'HellverseChat - Verify Your Account',
+        html: getEmailTemplate(code)
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Resend API error: ${error}`);
+    }
+
+    const result = await response.json();
+    console.log('📧 Email sent successfully via Resend:', result.id);
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Resend email error:', error);
+    throw new Error('Failed to send verification email via Resend');
+  }
+};
+
+const getEmailTemplate = (code) => `
+  <div style="background: #1a1a2e; color: #e0e0e0; padding: 20px; font-family: Arial, sans-serif;">
+    <div style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 20px; border-radius: 8px; border: 2px solid #3498db;">
+      <h1 style="color: #3498db; text-align: center; margin-bottom: 20px;">
+        🔥 Welcome to HellverseChat! 🔥
+      </h1>
+      <p style="font-size: 18px; margin-bottom: 30px; text-align: center;">
+        Your supernatural journey begins here. Verify your account to join the darkness:
+      </p>
+      <div style="background: #34495e; border: 2px solid #e74c3c; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+        <h2 style="color: #3498db; font-size: 32px; letter-spacing: 8px; margin: 0;">
+          ${code}
+        </h2>
+      </div>
+      <p style="font-size: 14px; color: #bdc3c7; margin-bottom: 10px;">
+        • This code will expire in 10 minutes
+      </p>
+      <p style="font-size: 14px; color: #bdc3c7; margin-bottom: 20px;">
+        • If you didn't create this account, you can safely ignore this email
+      </p>
+      <div style="text-align: center; margin-top: 30px;">
+        <p style="color: #7f8c8d; font-size: 12px;">
+          HellverseChat - Supernatural Roleplaying Community<br>
+          Create your character and join the darkness!
+        </p>
+      </div>
+    </div>
+  </div>
+`;
+
 // Email sending function with nodemailer
 const sendVerificationEmail = async (email, code) => {
   console.log('📧 sendVerificationEmail called with:', { 
     email, 
     code, 
     hasEmailUser: !!process.env.EMAIL_USER, 
-    hasEmailPass: !!process.env.EMAIL_PASS 
+    hasEmailPass: !!process.env.EMAIL_PASS,
+    hasResendKey: !!process.env.RESEND_API_KEY
   });
+
+  // Check for service-based email providers first
+  if (process.env.RESEND_API_KEY) {
+    console.log('📧 Using Resend API for email sending...');
+    return await sendWithResend(email, code);
+  }
 
   // For development/testing, log the code
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log(`📧 [DEV MODE] Verification email would be sent to: ${email}`);
     console.log(`📧 [DEV MODE] Verification code: ${code}`);
-    console.log(`📧 [DEV MODE] Supported email providers: Gmail, Outlook, Yahoo, iCloud, AOL, Zoho, ProtonMail`);
-    console.log(`📧 [DEV MODE] Just set EMAIL_USER and EMAIL_PASS - provider auto-detected!`);
+    console.log(`📧 [DEV MODE] Email Options:`);
+    console.log(`📧 [DEV MODE] 1. Personal Gmail: Set EMAIL_USER and EMAIL_PASS`);
+    console.log(`📧 [DEV MODE] 2. Resend Service: Set RESEND_API_KEY (recommended for production)`);
+    console.log(`📧 [DEV MODE] 3. SendGrid: Set SENDGRID_API_KEY`);
     return Promise.resolve();
   }
 
