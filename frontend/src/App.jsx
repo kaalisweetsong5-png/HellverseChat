@@ -25,16 +25,27 @@ function App() {
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
     
+    console.log('🔐 Auth Check:', {
+      hasToken: !!token,
+      hasStoredUser: !!storedUser,
+      tokenLength: token?.length,
+      storedUserPreview: storedUser?.substring(0, 50) + '...'
+    });
+    
     if (token && storedUser) {
       try {
         const userData = JSON.parse(storedUser);
+        console.log('✅ Parsed user data:', userData);
         setUser(userData);
         setIsAuthenticated(true);
+        console.log('🎯 Setting authenticated to true');
       } catch (error) {
-        console.error("Error parsing stored user data:", error);
+        console.error("❌ Error parsing stored user data:", error);
         localStorage.removeItem("token");
         localStorage.removeItem("user");
       }
+    } else {
+      console.log('❌ No valid auth data found');
     }
     
     setIsLoading(false);
@@ -49,6 +60,7 @@ function App() {
   };
 
   if (isLoading) {
+    console.log('⏳ App is loading...');
     return (
       <div className="loading-screen">
         <div className="loading-content">
@@ -59,6 +71,12 @@ function App() {
     );
   }
 
+  console.log('🚦 App render:', {
+    isAuthenticated,
+    user: user?.username || 'none',
+    currentPath: window.location.pathname
+  });
+
   return (
     <div className="app">
       <Routes>
@@ -66,7 +84,17 @@ function App() {
         <Route 
           path="/" 
           element={
-            isAuthenticated ? <Navigate to="/chat" replace /> : <LandingPage />
+            isAuthenticated ? (
+              <>
+                {console.log('🔄 Redirecting to /chat from /')}
+                <Navigate to="/chat" replace />
+              </>
+            ) : (
+              <>
+                {console.log('🏠 Showing landing page')}
+                <LandingPage />
+              </>
+            )
           } 
         />
         
@@ -89,12 +117,18 @@ function App() {
           path="/chat" 
           element={
             isAuthenticated ? (
-              <ChatInterface 
-                user={user}
-                onLogout={handleLogout}
-              />
+              <>
+                {console.log('💬 Loading chat interface for:', user?.username)}
+                <ChatInterface 
+                  user={user}
+                  onLogout={handleLogout}
+                />
+              </>
             ) : (
-              <Navigate to="/" replace />
+              <>
+                {console.log('🚫 Not authenticated, redirecting to home from /chat')}
+                <Navigate to="/" replace />
+              </>
             )
           } 
         />
